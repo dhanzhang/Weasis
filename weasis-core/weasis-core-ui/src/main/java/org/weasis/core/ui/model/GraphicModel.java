@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model;
 
 import java.awt.Graphics2D;
@@ -85,7 +95,7 @@ public interface GraphicModel extends UUIDable {
     /**
      * Gets all layer manager listeners of this layer.
      */
-    GraphicModelChangeListener[] getChangeListeners();
+    List<GraphicModelChangeListener> getChangeListeners();
 
     /**
      * Adds a layer manager listener to this layer.
@@ -105,10 +115,6 @@ public interface GraphicModel extends UUIDable {
 
     int getLayerCount();
 
-    void setCreateGraphic(Graphic graphic);
-
-    Graphic getCreateGraphic();
-
     void removeGraphic(Graphic graphic);
 
     void addGraphicChangeHandler(PropertyChangeListener graphicsChangeHandler);
@@ -123,5 +129,11 @@ public interface GraphicModel extends UUIDable {
 
     List<GraphicLayer> groupLayerByType();
 
-    void deleteByLayer(GraphicLayer type);
+    void deleteByLayer(GraphicLayer layer);
+
+    void deleteNonSerializableGraphics();
+
+    boolean hasSerializableGraphics();
+
+    List<PropertyChangeListener> getGraphicsListeners();
 }

@@ -1,8 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.viewer2d.mip;
 
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import javax.swing.ImageIcon;
 import javax.swing.JDialog;
@@ -16,6 +27,7 @@ import org.weasis.core.api.gui.task.TaskInterruptionException;
 import org.weasis.core.api.gui.task.TaskMonitor;
 import org.weasis.core.api.gui.util.ActionState;
 import org.weasis.core.api.gui.util.ActionW;
+import org.weasis.core.api.gui.util.AppProperties;
 import org.weasis.core.api.gui.util.GuiExecutor;
 import org.weasis.core.api.gui.util.SliderCineListener;
 import org.weasis.core.api.image.OpManager;
@@ -25,6 +37,7 @@ import org.weasis.core.api.media.data.MediaSeriesGroup;
 import org.weasis.core.api.media.data.Series;
 import org.weasis.core.api.media.data.TagW;
 import org.weasis.core.api.service.AuditLog;
+import org.weasis.core.api.util.FileUtil;
 import org.weasis.core.ui.editor.ViewerPluginBuilder;
 import org.weasis.core.ui.editor.image.ImageViewerEventManager;
 import org.weasis.core.ui.editor.image.ImageViewerPlugin;
@@ -60,7 +73,7 @@ public class MipView extends View2d {
     @Override
     protected void initActionWState() {
         super.initActionWState();
-        actionsInView.put(ViewCanvas.zoomTypeCmd, ZoomType.BEST_FIT);
+        actionsInView.put(ViewCanvas.ZOOM_TYPE_CMD, ZoomType.BEST_FIT);
         actionsInView.put(MIP_THICKNESS.cmd(), 2);
         actionsInView.put(MipView.MIP.cmd(), MipView.Type.MAX);
         actionsInView.put("no.ko", true); //$NON-NLS-1$
@@ -93,6 +106,7 @@ public class MipView extends View2d {
         final MipProcess t = process;
         if (t != null) {
             process = null;
+            t.taskMonitor.setAborting(true);
             // Close won't stop the process immediately
             t.taskMonitor.close();
             t.interrupt();
@@ -105,6 +119,8 @@ public class MipView extends View2d {
         this.setActionsInView(MipView.MIP_THICKNESS.cmd(), null);
 
         setMip(null);
+        File mipDir = AppProperties.buildAccessibleTempDirectory(AppProperties.FILE_CACHE_DIR.getName(), "mip"); //$NON-NLS-1$
+        FileUtil.deleteDirectoryContents(mipDir, 1, 0);
 
         ImageViewerPlugin<DicomImageElement> container = this.getEventManager().getSelectedView2dContainer();
         container.setSelectedAndGetFocus();
@@ -127,60 +143,53 @@ public class MipView extends View2d {
             return;
         }
 
-        view.process =
-            new MipProcess(Messages.getString("MipView.build"), new TaskMonitor(dialog == null ? view : dialog, //$NON-NLS-1$
-                Messages.getString("MipView.monitoring_proc"), Messages.getString("MipView.init"), 0, 2 * extend + 1)) { //$NON-NLS-1$ //$NON-NLS-2$
-                @Override
-                public void run() {
-                    final List<DicomImageElement> dicoms = new ArrayList<DicomImageElement>();
+        TaskMonitor taskMonitor = new TaskMonitor(dialog == null ? view : dialog,
+            Messages.getString("MipView.monitoring_proc"), Messages.getString("MipView.init"), 0, 2 * extend + 1); //$NON-NLS-1$//$NON-NLS-2$
+        Runnable runnable = () -> {
+            final List<DicomImageElement> dicoms = new ArrayList<>();
+            try {
+                taskMonitor.setMillisToPopup(1250);
+                SeriesBuilder.applyMipParameters(taskMonitor, view, ser, dicoms, mipType, extend, fullSeries);
+            } catch (TaskInterruptionException e) {
+                dicoms.clear();
+                LOGGER.info(e.getMessage());
+            } catch (Throwable t) {
+                dicoms.clear();
+                AuditLog.logError(LOGGER, t, "Mip renderding error"); //$NON-NLS-1$
+            } finally {
+                // Following actions need to be executed in EDT thread
+                GuiExecutor.instance().execute(() -> {
                     try {
-                        taskMonitor.setMillisToPopup(1250);
-                        SeriesBuilder.applyMipParameters(taskMonitor, view, ser, dicoms, mipType, extend, fullSeries);
-                    } catch (TaskInterruptionException e) {
-                        dicoms.clear();
-                        LOGGER.info(e.getMessage());
-                    } catch (Throwable t) {
-                        dicoms.clear();
-                        AuditLog.logError(LOGGER, t, "Mip renderding error"); //$NON-NLS-1$
-                    } finally {
-                        // Following actions need to be executed in EDT thread
-                        GuiExecutor.instance().execute(new Runnable() {
-
-                            @Override
-                            public void run() {
-                                try {
-                                    if (dicoms.size() == 1) {
-                                        view.setMip(dicoms.get(0));
-                                    } else if (dicoms.size() > 1) {
-                                        DicomImageElement dcm = dicoms.get(0);
-                                        Series s =
-                                            new DicomSeries(TagD.getTagValue(dcm, Tag.SeriesInstanceUID, String.class));
-                                        s.addAll(dicoms);
-                                        ((DcmMediaReader) dcm.getMediaReader()).writeMetaData(s);
-                                        DataExplorerModel model =
-                                            (DataExplorerModel) ser.getTagValue(TagW.ExplorerModel);
-                                        if (model instanceof DicomModel) {
-                                            DicomModel dicomModel = (DicomModel) model;
-                                            MediaSeriesGroup study = dicomModel.getParent(ser, DicomModel.study);
-                                            if (study != null) {
-                                                s.setTag(TagW.ExplorerModel, dicomModel);
-                                                dicomModel.addHierarchyNode(study, s);
-                                                dicomModel.firePropertyChange(new ObservableEvent(
-                                                    ObservableEvent.BasicAction.Add, dicomModel, null, s));
-                                            }
-
-                                            View2dFactory factory = new View2dFactory();
-                                            ViewerPluginBuilder.openSequenceInPlugin(factory, s, model, false, false);
-                                        }
-                                    }
-                                } finally {
-                                    taskMonitor.close();
+                        if (dicoms.size() == 1) {
+                            view.setMip(dicoms.get(0));
+                        } else if (dicoms.size() > 1) {
+                            DicomImageElement dcm = dicoms.get(0);
+                            Series s = new DicomSeries(TagD.getTagValue(dcm, Tag.SeriesInstanceUID, String.class));
+                            s.addAll(dicoms);
+                            ((DcmMediaReader) dcm.getMediaReader()).writeMetaData(s);
+                            DataExplorerModel model = (DataExplorerModel) ser.getTagValue(TagW.ExplorerModel);
+                            if (model instanceof DicomModel) {
+                                DicomModel dicomModel = (DicomModel) model;
+                                MediaSeriesGroup study = dicomModel.getParent(ser, DicomModel.study);
+                                if (study != null) {
+                                    s.setTag(TagW.ExplorerModel, dicomModel);
+                                    dicomModel.addHierarchyNode(study, s);
+                                    dicomModel.firePropertyChange(
+                                        new ObservableEvent(ObservableEvent.BasicAction.ADD, dicomModel, null, s));
                                 }
+
+                                View2dFactory factory = new View2dFactory();
+                                ViewerPluginBuilder.openSequenceInPlugin(factory, s, model, false, false);
                             }
-                        });
+                        }
+                    } finally {
+                        taskMonitor.close();
                     }
-                }
-            };
+                });
+            }
+        };
+
+        view.process = new MipProcess(runnable, Messages.getString("MipView.build"), taskMonitor); //$NON-NLS-1$
         view.process.start();
 
     }
@@ -199,14 +208,15 @@ public class MipView extends View2d {
             ActionState sequence = eventManager.getAction(ActionW.SCROLL_SERIES);
             if (sequence instanceof SliderCineListener) {
                 SliderCineListener cineAction = (SliderCineListener) sequence;
-                cineAction.stateChanged(cineAction.getModel());
+                cineAction.stateChanged(cineAction.getSliderModel());
             }
             // Close stream
             oldImage.dispose();
+            oldImage.removeImageFromCache();
             // Delete file in cache
             File file = oldImage.getFile();
             if (file != null) {
-                file.delete();
+                FileUtil.delete(file);
             }
         }
     }
@@ -214,11 +224,10 @@ public class MipView extends View2d {
     static class MipProcess extends Thread {
         final TaskMonitor taskMonitor;
 
-        public MipProcess(String name, TaskMonitor taskMonitor) {
-            super(name);
-            this.taskMonitor = taskMonitor;
+        public MipProcess(Runnable runnable, String name, TaskMonitor taskMonitor) {
+            super(runnable, name);
+            this.taskMonitor = Objects.requireNonNull(taskMonitor);
         }
-
     }
 
 }

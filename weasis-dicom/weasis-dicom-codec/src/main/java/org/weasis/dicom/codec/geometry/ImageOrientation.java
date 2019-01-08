@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.codec.geometry;
 
 import org.dcm4che3.data.Tag;
@@ -37,12 +47,18 @@ import org.weasis.dicom.codec.TagD;
  */
 public abstract class ImageOrientation {
 
-    public static final String[] LABELS = { "UNKNOWN", "AXIAL", "SAGITTAL", "CORONAL", "OBLIQUE" }; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$
-    // 0.5477 would be the square root of 1 (unit vector sum of squares) divided by 3 (oblique axes - a "double"
-    // oblique)
-    // 0.7071 would be the square root of 1 (unit vector sum of squares) divided by 2 (oblique axes)
-    /***/
-    private static final double obliquityThresholdCosineValue = 0.8;
+    public enum Label {
+        UNKNOWN, AXIAL, SAGITTAL, CORONAL, OBLIQUE
+    }
+
+    public static final String DIR_R = "R"; //$NON-NLS-1$
+    public static final String DIR_L = "L"; //$NON-NLS-1$
+    public static final String DIR_A = "A"; //$NON-NLS-1$
+    public static final String DIR_P = "P"; //$NON-NLS-1$
+    public static final String DIR_F = "F"; //$NON-NLS-1$
+    public static final String DIR_H = "H"; //$NON-NLS-1$
+
+    private static final double OBLIQUITY_THRESHOLD = 0.8;
 
     /**
      * <p>
@@ -62,9 +78,9 @@ public abstract class ImageOrientation {
     public static final String getMajorAxisFromPatientRelativeDirectionCosine(double x, double y, double z) {
         String axis = null;
 
-        String orientationX = x < 0 ? "R" : "L"; //$NON-NLS-1$ //$NON-NLS-2$
-        String orientationY = y < 0 ? "A" : "P"; //$NON-NLS-1$ //$NON-NLS-2$
-        String orientationZ = z < 0 ? "F" : "H"; //$NON-NLS-1$ //$NON-NLS-2$
+        String orientationX = x < 0 ? DIR_R : DIR_L;
+        String orientationY = y < 0 ? DIR_A : DIR_P;
+        String orientationZ = z < 0 ? DIR_F : DIR_H;
 
         double absX = Math.abs(x);
         double absY = Math.abs(y);
@@ -74,11 +90,11 @@ public abstract class ImageOrientation {
         // just the threshold, since the sum of the squares should be == 1.0
         // but just in case ...
 
-        if (absX > obliquityThresholdCosineValue && absX > absY && absX > absZ) {
+        if (absX > OBLIQUITY_THRESHOLD && absX > absY && absX > absZ) {
             axis = orientationX;
-        } else if (absY > obliquityThresholdCosineValue && absY > absX && absY > absZ) {
+        } else if (absY > OBLIQUITY_THRESHOLD && absY > absX && absY > absZ) {
             axis = orientationY;
-        } else if (absZ > obliquityThresholdCosineValue && absZ > absX && absZ > absY) {
+        } else if (absZ > OBLIQUITY_THRESHOLD && absZ > absX && absZ > absY) {
             axis = orientationZ;
         }
 
@@ -105,32 +121,34 @@ public abstract class ImageOrientation {
      * @return the string describing the plane of orientation, AXIAL, CORONAL, SAGITTAL or OBLIQUE
      */
 
-    public static final String makeImageOrientationLabelFromImageOrientationPatient(double rowX, double rowY,
+    public static final Label makeImageOrientationLabelFromImageOrientationPatient(double rowX, double rowY,
         double rowZ, double colX, double colY, double colZ) {
-        String label = null;
         String rowAxis = getMajorAxisFromPatientRelativeDirectionCosine(rowX, rowY, rowZ);
         String colAxis = getMajorAxisFromPatientRelativeDirectionCosine(colX, colY, colZ);
         if (rowAxis != null && colAxis != null) {
-            if ((rowAxis.equals("R") || rowAxis.equals("L")) && (colAxis.equals("A") || colAxis.equals("P"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-                label = LABELS[1];
-            } else if ((colAxis.equals("R") || colAxis.equals("L")) && (rowAxis.equals("A") || rowAxis.equals("P"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-                label = LABELS[1];
-            } else if ((rowAxis.equals("R") || rowAxis.equals("L")) && (colAxis.equals("H") || colAxis.equals("F"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-                label = LABELS[3];
-            } else if ((colAxis.equals("R") || colAxis.equals("L")) && (rowAxis.equals("H") || rowAxis.equals("F"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-                label = LABELS[3];
-            } else if ((rowAxis.equals("A") || rowAxis.equals("P")) && (colAxis.equals("H") || colAxis.equals("F"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-                label = LABELS[2];
-            } else if ((colAxis.equals("A") || colAxis.equals("P")) && (rowAxis.equals("H") || rowAxis.equals("F"))) { //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
-                label = LABELS[2];
+            if ((rowAxis.equals(DIR_R) || rowAxis.equals(DIR_L)) && (colAxis.equals(DIR_A) || colAxis.equals(DIR_P))) {
+                return Label.AXIAL;
+            } else if ((colAxis.equals(DIR_R) || colAxis.equals(DIR_L))
+                && (rowAxis.equals(DIR_A) || rowAxis.equals(DIR_P))) {
+                return Label.AXIAL;
+            } else if ((rowAxis.equals(DIR_R) || rowAxis.equals(DIR_L))
+                && (colAxis.equals(DIR_H) || colAxis.equals(DIR_F))) {
+                return Label.CORONAL;
+            } else if ((colAxis.equals(DIR_R) || colAxis.equals(DIR_L))
+                && (rowAxis.equals(DIR_H) || rowAxis.equals(DIR_F))) {
+                return Label.CORONAL;
+            } else if ((rowAxis.equals(DIR_A) || rowAxis.equals(DIR_P))
+                && (colAxis.equals(DIR_H) || colAxis.equals(DIR_F))) {
+                return Label.SAGITTAL;
+            } else if ((colAxis.equals(DIR_A) || colAxis.equals(DIR_P))
+                && (rowAxis.equals(DIR_H) || rowAxis.equals(DIR_F))) {
+                return Label.SAGITTAL;
             }
-        } else {
-            label = LABELS[4];
         }
-        return label;
+        return Label.OBLIQUE;
     }
 
-    public static final String makeImageOrientationLabelFromImageOrientationPatient(double[] v) {
+    public static final Label makeImageOrientationLabelFromImageOrientationPatient(double[] v) {
         if (v == null || v.length < 6) {
             return null;
         }
@@ -160,9 +178,9 @@ public abstract class ImageOrientation {
     public static final String makePatientOrientationFromPatientRelativeDirectionCosine(double x, double y, double z) {
         StringBuilder buffer = new StringBuilder();
 
-        String orientationX = x < 0 ? "R" : "L"; //$NON-NLS-1$ //$NON-NLS-2$
-        String orientationY = y < 0 ? "A" : "P"; //$NON-NLS-1$ //$NON-NLS-2$
-        String orientationZ = z < 0 ? "F" : "H"; //$NON-NLS-1$ //$NON-NLS-2$
+        String orientationX = x < 0 ? DIR_R : DIR_L;
+        String orientationY = y < 0 ? DIR_A : DIR_P;
+        String orientationZ = z < 0 ? DIR_F : DIR_H;
 
         double absX = Math.abs(x);
         double absY = Math.abs(y);
@@ -218,6 +236,24 @@ public abstract class ImageOrientation {
             + makePatientOrientationFromPatientRelativeDirectionCosine(colX, colY, colZ);
     }
 
+    public static final char getImageOrientationOposite(char c) {
+        switch (c) {
+            case 'L':
+                return 'R';
+            case 'R':
+                return 'L';
+            case 'P':
+                return 'A';
+            case 'A':
+                return 'P';
+            case 'H':
+                return 'F';
+            case 'F':
+                return 'H';
+        }
+        return ' ';
+    }
+
     public static double[] computeNormalVectorOfPlan(double[] vector) {
         if (vector != null && vector.length == 6) {
             double[] norm = new double[3];
@@ -246,12 +282,12 @@ public abstract class ImageOrientation {
             double[] v1 = TagD.getTagValue(image1, Tag.ImageOrientationPatient, double[].class);
             double[] v2 = TagD.getTagValue(image2, Tag.ImageOrientationPatient, double[].class);
             if (v1 != null && v1.length == 6 && v2 != null && v2.length == 6) {
-                String label1 = ImageOrientation.makeImageOrientationLabelFromImageOrientationPatient(v1[0], v1[1],
+                Label label1 = ImageOrientation.makeImageOrientationLabelFromImageOrientationPatient(v1[0], v1[1],
                     v1[2], v1[3], v1[4], v1[5]);
-                String label2 = ImageOrientation.makeImageOrientationLabelFromImageOrientationPatient(v2[0], v2[1],
+                Label label2 = ImageOrientation.makeImageOrientationLabelFromImageOrientationPatient(v2[0], v2[1],
                     v2[2], v2[3], v2[4], v2[5]);
 
-                if (label1 != null && !label1.equals(LABELS[4])) {
+                if (label1 != null && !label1.equals(Label.OBLIQUE)) {
                     return label1.equals(label2);
                 }
                 // If oblique search if the plan has approximately the same orientation

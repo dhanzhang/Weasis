@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.explorer.wado;
 
 import java.util.ArrayList;
@@ -17,6 +17,8 @@ import org.dcm4che3.data.Tag;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
 import org.osgi.service.prefs.Preferences;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.weasis.core.api.media.data.TagView;
 import org.weasis.core.api.service.BundlePreferences;
 import org.weasis.dicom.codec.TagD;
@@ -25,6 +27,7 @@ import org.weasis.dicom.explorer.DicomFieldsView.DicomData;
 import org.weasis.dicom.explorer.Messages;
 
 public class DicomManager {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DicomManager.class);
 
     /** The single instance of this singleton class. */
 
@@ -64,7 +67,7 @@ public class DicomManager {
     private void initRequiredDicomTags() {
         TagView[] patient = { new TagView(TagD.get(Tag.PatientName)), new TagView(TagD.get(Tag.PatientID)),
             new TagView(TagD.get(Tag.IssuerOfPatientID)), new TagView(TagD.get(Tag.PatientSex)),
-            new TagView(TagD.get(Tag.PatientBirthDate)), new TagView(TagD.get(Tag.PatientAge)) };
+            new TagView(TagD.get(Tag.PatientBirthDate)) };
 
         final TagView[] station = { new TagView(TagD.get(Tag.Manufacturer)),
             new TagView(TagD.get(Tag.ManufacturerModelName)), new TagView(TagD.get(Tag.StationName)) };

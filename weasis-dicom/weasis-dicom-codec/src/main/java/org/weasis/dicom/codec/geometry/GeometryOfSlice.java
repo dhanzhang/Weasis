@@ -13,14 +13,9 @@ import javax.vecmath.Vector3d;
  * A class to describe the spatial geometry of a single cross-sectional image slice.
  * </p>
  *
- * <p>
- * The 3D coordinate space used is the DICOM coordinate space, which is LPH+, that is, the x-axis is increasing to the
- * left hand side of the patient, the y-axis is increasing to the posterior side of the patient, and the z-axis is
- * increasing toward the head of the patient.
- * </p>
- *
- * @author dclunie
- */
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 public class GeometryOfSlice {
 
     protected double[] rowArray;
@@ -35,7 +30,6 @@ public class GeometryOfSlice {
     protected Tuple3d voxelSpacing; // row spacing (between centers of adjacent rows), then column spacing, then slice
 
     protected double[] voxelSpacingArray;
-
 
     protected double sliceThickness;
 
@@ -122,7 +116,7 @@ public class GeometryOfSlice {
         normal.normalize();
         normalArray = new double[3];
         normal.get(normalArray);
-        // normalArray[2] = normalArray[2] * -1;
+        // depends of vector system (right/left-handed system): normalArray[2] = normalArray[2] * -1
         normal = new Vector3d(normalArray);
     }
 
@@ -304,12 +298,12 @@ public class GeometryOfSlice {
      * @return a string rendering of the orientation, more than one letter if oblique to the orthogonal axes, or empty
      *         string (not null) if fails
      */
-    public static final String getOrientation(double orientation[], boolean quadruped) {
-        StringBuffer strbuf = new StringBuffer();
+    public static final String getOrientation(double[] orientation, boolean quadruped) {
+        StringBuilder strbuf = new StringBuilder();
         if (orientation != null && orientation.length == 3) {
-            String orientationX = orientation[0] < 0 ? (quadruped ? "Rt" : "R") : (quadruped ? "Le" : "L");
-            String orientationY = orientation[1] < 0 ? (quadruped ? "V" : "A") : (quadruped ? "D" : "P");
-            String orientationZ = orientation[2] < 0 ? (quadruped ? "Cd" : "F") : (quadruped ? "Cr" : "H");
+            String orientationX = orientation[0] < 0 ? (quadruped ? "Rt" : "R") : (quadruped ? "Le" : "L"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+            String orientationY = orientation[1] < 0 ? (quadruped ? "V" : "A") : (quadruped ? "D" : "P"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
+            String orientationZ = orientation[2] < 0 ? (quadruped ? "Cd" : "F") : (quadruped ? "Cr" : "H"); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$
 
             double absX = Math.abs(orientation[0]);
             double absY = Math.abs(orientation[1]);
@@ -344,8 +338,8 @@ public class GeometryOfSlice {
      * @return a string rendering of the orientation, more than one letter if oblique to the orthogonal axes, or empty
      *         string (not null) if fails
      */
-    public static final String getOrientation(double orientation[]) {
-        return getOrientation(orientation, false/* quadruped */);
+    public static final String getOrientation(double[] orientation) {
+        return getOrientation(orientation, false);
     }
 
     /**
@@ -407,7 +401,7 @@ public class GeometryOfSlice {
      *         empty string (not null) if fails
      */
     public final String getRowOrientation() {
-        return getRowOrientation(false/* quadruped */);
+        return getRowOrientation(false);
     }
 
     /**
@@ -423,6 +417,6 @@ public class GeometryOfSlice {
      *         empty string (not null) if fails
      */
     public final String getColumnOrientation() {
-        return getColumnOrientation(false/* quadruped */);
+        return getColumnOrientation(false);
     }
 }

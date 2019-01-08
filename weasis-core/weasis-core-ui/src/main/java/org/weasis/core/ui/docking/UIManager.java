@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.docking;
 
 import java.awt.Window;
@@ -21,6 +21,7 @@ import org.weasis.core.api.gui.util.WinUtil;
 import org.weasis.core.ui.editor.SeriesViewer;
 import org.weasis.core.ui.editor.SeriesViewerFactory;
 import org.weasis.core.ui.editor.image.ViewerPlugin;
+import org.weasis.core.ui.util.Toolbar;
 
 import bibliothek.gui.dock.common.CContentArea;
 import bibliothek.gui.dock.common.CControl;
@@ -36,6 +37,8 @@ public class UIManager {
         Collections.synchronizedList(new ArrayList<ViewerPlugin<?>>());
     public static final List<DataExplorerView> EXPLORER_PLUGINS =
         Collections.synchronizedList(new ArrayList<DataExplorerView>());
+    public static final List<Toolbar> EXPLORER_PLUGIN_TOOLBARS =
+                    Collections.synchronizedList(new ArrayList<Toolbar>());
     public static final List<SeriesViewerFactory> SERIES_VIEWER_FACTORIES =
         Collections.synchronizedList(new ArrayList<SeriesViewerFactory>());
 
@@ -148,16 +151,16 @@ public class UIManager {
             }
 
             Collections.sort(plugins,
-                (s1, s2) -> (s1.getLevel() < s2.getLevel() ? -1 : (s1.getLevel() == s2.getLevel() ? 0 : 1)));
+                (s1, s2) -> s1.getLevel() < s2.getLevel() ? -1 : (s1.getLevel() == s2.getLevel() ? 0 : 1));
             return plugins;
         }
         return null;
     }
 
     public static void closeSeriesViewerType(Class<? extends SeriesViewer<?>> clazz) {
-        final List<SeriesViewer<?>> pluginsToRemove = new ArrayList<>();
+        final List<ViewerPlugin<?>> pluginsToRemove = new ArrayList<>();
         synchronized (UIManager.VIEWER_PLUGINS) {
-            for (final SeriesViewer<?> plugin : UIManager.VIEWER_PLUGINS) {
+            for (final ViewerPlugin<?> plugin : UIManager.VIEWER_PLUGINS) {
                 if (clazz.isInstance(plugin)) {
                     // Do not close Series directly, it can produce deadlock.
                     pluginsToRemove.add(plugin);
@@ -167,10 +170,11 @@ public class UIManager {
         closeSeriesViewer(pluginsToRemove);
     }
 
-    public static void closeSeriesViewer(final List<? extends SeriesViewer<?>> pluginsToRemove) {
+    public static void closeSeriesViewer(final List<? extends ViewerPlugin<?>> pluginsToRemove) {
         if (pluginsToRemove != null) {
-            for (final SeriesViewer<?> viewerPlugin : pluginsToRemove) {
+            for (final ViewerPlugin<?> viewerPlugin : pluginsToRemove) {
                 viewerPlugin.close();
+                viewerPlugin.handleFocusAfterClosing();
             }
         }
     }

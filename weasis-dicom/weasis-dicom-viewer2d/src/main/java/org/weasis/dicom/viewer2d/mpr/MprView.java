@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.viewer2d.mpr;
 
 import java.awt.Graphics2D;
@@ -25,7 +35,7 @@ public class MprView extends View2d {
 
     public enum SliceOrientation {
         AXIAL, CORONAL, SAGITTAL
-    };
+    }
 
     private SliceOrientation sliceOrientation;
     private JProgressBar progressBar;
@@ -42,7 +52,7 @@ public class MprView extends View2d {
     @Override
     protected void initActionWState() {
         super.initActionWState();
-        actionsInView.put(ViewCanvas.zoomTypeCmd, ZoomType.CURRENT);
+        actionsInView.put(ViewCanvas.ZOOM_TYPE_CMD, ZoomType.CURRENT);
         /*
          * Get the radiologist way to see stack (means in axial, the first image is from feet and last image is in the
          * head direction) This option may not be changed. Sorting stack must be disabled from menu in UI.

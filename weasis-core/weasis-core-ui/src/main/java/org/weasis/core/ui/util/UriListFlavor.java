@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.util;
 
 import java.awt.datatransfer.DataFlavor;
@@ -22,9 +22,9 @@ import org.slf4j.LoggerFactory;
 public class UriListFlavor {
     private static final Logger LOGGER = LoggerFactory.getLogger(UriListFlavor.class);
 
-    public static final DataFlavor uriListFlavor = createConstant("text/uri-list;class=java.lang.String", null);
+    public static final DataFlavor flavor = createConstant("text/uri-list;class=java.lang.String", null); //$NON-NLS-1$
 
-    private static final DataFlavor[] flavors = new DataFlavor[] { DataFlavor.javaFileListFlavor, uriListFlavor };
+    private static final DataFlavor[] flavors = new DataFlavor[] { DataFlavor.javaFileListFlavor, flavor };
 
     private UriListFlavor() {
     }
@@ -33,7 +33,7 @@ public class UriListFlavor {
         try {
             return new DataFlavor(mt, prn, UriListFlavor.class.getClassLoader()); // $NON-NLS-1$
         } catch (Exception e) {
-            LOGGER.error("Build uri flavor", e);
+            LOGGER.error("Build uri flavor", e); //$NON-NLS-1$
             return null;
         }
     }
@@ -47,7 +47,7 @@ public class UriListFlavor {
                 try {
                     list.add(new File(new URI(s)));
                 } catch (Exception e) {
-                    LOGGER.error("Build file from URI", e);
+                    LOGGER.error("Build file from URI", e); //$NON-NLS-1$
                 }
             }
         }

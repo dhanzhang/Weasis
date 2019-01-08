@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse  License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.editor;
 
 import java.util.Collections;
@@ -23,7 +23,7 @@ import org.weasis.core.ui.docking.DockableTool;
 import org.weasis.core.ui.util.Toolbar;
 import org.weasis.core.ui.util.WtoolBar;
 
-public interface SeriesViewer<E extends MediaElement<?>> {
+public interface SeriesViewer<E extends MediaElement> {
 
     String getPluginName();
 
@@ -35,7 +35,7 @@ public interface SeriesViewer<E extends MediaElement<?>> {
 
     void removeSeries(MediaSeries<E> series);
 
-    JMenu fillSelectedPluginMenu(JMenu menu);
+    JMenu fillSelectedPluginMenu(JMenu menuRoot);
 
     List<Toolbar> getToolBar();
 

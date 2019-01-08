@@ -1,16 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.util;
 
 import java.awt.geom.Point2D;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 
 /**
  * The Class MathUtil.
@@ -52,7 +54,7 @@ public class MathUtil {
     }
 
     public static boolean isEqual(double a, double b) {
-        // Math.copySign is imilar to Math.abs(x), but with different NaN semantics
+        // Math.copySign is similar to Math.abs(x), but with different NaN semantics
         return Math.copySign(a - b, 1.0) <= DOUBLE_EPSILON || (a == b) // infinities equal themselves
             || (Double.isNaN(a) && Double.isNaN(b));
     }
@@ -121,5 +123,14 @@ public class MathUtil {
             res = max;
         }
         return res;
+    }
+    
+    public static double round(double value, int places) {
+        if (places < 0)
+            throw new IllegalArgumentException();
+
+        BigDecimal bd = BigDecimal.valueOf(value);
+        bd = bd.setScale(places, RoundingMode.HALF_UP);
+        return bd.doubleValue();
     }
 }

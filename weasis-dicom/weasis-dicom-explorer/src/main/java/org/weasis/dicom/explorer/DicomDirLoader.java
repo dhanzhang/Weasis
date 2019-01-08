@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.explorer;
 
 import java.awt.Point;
@@ -9,6 +19,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
@@ -22,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.core.api.explorer.model.DataExplorerModel;
 import org.weasis.core.api.gui.util.GuiExecutor;
-import org.weasis.core.api.image.util.ImageFiler;
 import org.weasis.core.api.media.data.MediaSeriesGroup;
 import org.weasis.core.api.media.data.MediaSeriesGroupNode;
 import org.weasis.core.api.media.data.Series;
@@ -30,15 +40,17 @@ import org.weasis.core.api.media.data.TagW;
 import org.weasis.core.api.media.data.Thumbnail;
 import org.weasis.core.ui.docking.UIManager;
 import org.weasis.core.ui.editor.image.ViewerPlugin;
-import org.weasis.dicom.codec.DicomInstance;
 import org.weasis.dicom.codec.DicomSeries;
 import org.weasis.dicom.codec.TagD;
 import org.weasis.dicom.codec.TagD.Level;
-import org.weasis.dicom.codec.utils.DicomImageUtils;
 import org.weasis.dicom.codec.utils.DicomMediaUtils;
-import org.weasis.dicom.codec.wado.WadoParameters;
+import org.weasis.dicom.codec.utils.PatientComparator;
 import org.weasis.dicom.explorer.wado.DownloadPriority;
 import org.weasis.dicom.explorer.wado.LoadSeries;
+import org.weasis.dicom.explorer.wado.SeriesInstanceList;
+import org.weasis.dicom.mf.SopInstance;
+import org.weasis.dicom.mf.WadoParameters;
+import org.weasis.opencv.op.ImageProcessor;
 
 public class DicomDirLoader {
     private static final Logger LOGGER = LoggerFactory.getLogger(DicomDirLoader.class);
@@ -58,7 +70,7 @@ public class DicomDirLoader {
         this.dicomModel = (DicomModel) explorerModel;
         this.writeInCache = writeInCache;
         this.dcmDirFile = dcmDirFile;
-        wadoParameters = new WadoParameters("", true, "", null, null); //$NON-NLS-1$ //$NON-NLS-2$
+        wadoParameters = new WadoParameters("", true); //$NON-NLS-1$
         seriesList = new ArrayList<>();
 
     }
@@ -66,14 +78,13 @@ public class DicomDirLoader {
     public List<LoadSeries> readDicomDir() {
         Attributes dcmPatient = null;
         MediaSeriesGroup patient = null;
-        int pat = 0;
 
         try (DicomDirReader reader = new DicomDirReader(dcmDirFile)) {
             dcmPatient = findFirstRootDirectoryRecordInUse(reader);
 
             while (dcmPatient != null) {
                 if (RecordType.PATIENT.name().equals(dcmPatient.getString(Tag.DirectoryRecordType))) {
-                    parsePatient(dcmPatient, reader);
+                    patient = parsePatient(dcmPatient, reader);
                 }
                 dcmPatient = findNextSiblingRecord(dcmPatient, reader);
             }
@@ -81,19 +92,15 @@ public class DicomDirLoader {
             LOGGER.error("Cannot read DICOMDIR !", e); //$NON-NLS-1$
         }
 
-        if (pat == 1) {
+        if (patient != null) {
             // In case of the patient already exists, select it
             final MediaSeriesGroup uniquePatient = patient;
-            GuiExecutor.instance().execute(new Runnable() {
-
-                @Override
-                public void run() {
-                    synchronized (UIManager.VIEWER_PLUGINS) {
-                        for (final ViewerPlugin p : UIManager.VIEWER_PLUGINS) {
-                            if (uniquePatient.equals(p.getGroupID())) {
-                                p.setSelectedAndGetFocus();
-                                break;
-                            }
+            GuiExecutor.instance().execute(() -> {
+                synchronized (UIManager.VIEWER_PLUGINS) {
+                    for (final ViewerPlugin p : UIManager.VIEWER_PLUGINS) {
+                        if (uniquePatient.equals(p.getGroupID())) {
+                            p.setSelectedAndGetFocus();
+                            break;
                         }
                     }
                 }
@@ -109,26 +116,24 @@ public class DicomDirLoader {
         return seriesList;
     }
 
-    private boolean parsePatient(Attributes dcmPatient, DicomDirReader reader) {
-        boolean newPatient = false;
+    private MediaSeriesGroup parsePatient(Attributes dcmPatient, DicomDirReader reader) {
+        MediaSeriesGroup patient = null;
         try {
-            String patientPseudoUID =
-                DicomMediaUtils.buildPatientPseudoUID(dcmPatient.getString(Tag.PatientID, TagW.NO_VALUE),
-                    dcmPatient.getString(Tag.IssuerOfPatientID), dcmPatient.getString(Tag.PatientName, TagW.NO_VALUE));
+            PatientComparator patientComparator = new PatientComparator(dcmPatient);
+            String patientPseudoUID = patientComparator.buildPatientPseudoUID();
 
-            MediaSeriesGroup patient = dicomModel.getHierarchyNode(MediaSeriesGroupNode.rootNode, patientPseudoUID);
+            patient = dicomModel.getHierarchyNode(MediaSeriesGroupNode.rootNode, patientPseudoUID);
             if (patient == null) {
                 patient = new MediaSeriesGroupNode(TagD.getUID(Level.PATIENT), patientPseudoUID,
                     DicomModel.patient.getTagView());
                 DicomMediaUtils.writeMetaData(patient, dcmPatient);
                 dicomModel.addHierarchyNode(MediaSeriesGroupNode.rootNode, patient);
-                newPatient = true;
             }
             parseStudy(patient, dcmPatient, reader);
         } catch (Exception e) {
             LOGGER.error("Cannot read DICOMDIR !", e); //$NON-NLS-1$
         }
-        return newPatient;
+        return patient;
     }
 
     private void parseStudy(MediaSeriesGroup patient, Attributes dcmPatient, DicomDirReader reader) {
@@ -159,25 +164,20 @@ public class DicomDirLoader {
                     dicomSeries = new DicomSeries(seriesUID);
                     dicomSeries.setTag(TagW.ExplorerModel, dicomModel);
                     dicomSeries.setTag(TagW.WadoParameters, wadoParameters);
-                    dicomSeries.setTag(TagW.WadoInstanceReferenceList, new ArrayList<DicomInstance>());
                     DicomMediaUtils.writeMetaData(dicomSeries, series);
                     dicomModel.addHierarchyNode(study, dicomSeries);
                 } else {
                     WadoParameters wado = (WadoParameters) dicomSeries.getTagValue(TagW.WadoParameters);
                     if (wado == null) {
-                        // Should not happen
+                        // Should never happen
                         dicomSeries.setTag(TagW.WadoParameters, wadoParameters);
                     }
                 }
 
-                List<DicomInstance> dicomInstances =
-                    (List<DicomInstance>) dicomSeries.getTagValue(TagW.WadoInstanceReferenceList);
-                boolean containsInstance = false;
-                if (dicomInstances == null) {
-                    dicomSeries.setTag(TagW.WadoInstanceReferenceList, new ArrayList<DicomInstance>());
-                } else if (!dicomInstances.isEmpty()) {
-                    containsInstance = true;
-                }
+                SeriesInstanceList seriesInstanceList =
+                    Optional.ofNullable((SeriesInstanceList) dicomSeries.getTagValue(TagW.WadoInstanceReferenceList))
+                        .orElseGet(SeriesInstanceList::new);
+                dicomSeries.setTag(TagW.WadoInstanceReferenceList, seriesInstanceList);
 
                 // Icon Image Sequence (0088,0200).This Icon Image is representative of the Series. It may or may not
                 // correspond to one of the images of the Series.
@@ -188,19 +188,16 @@ public class DicomDirLoader {
                     // Try to read all the file types of the Series.
 
                     String sopInstanceUID = instance.getString(Tag.ReferencedSOPInstanceUIDInFile);
-
                     if (sopInstanceUID != null) {
-                        DicomInstance dcmInstance = new DicomInstance(sopInstanceUID);
-                        if (containsInstance && dicomInstances.contains(dcmInstance)) {
-                            LOGGER.warn("DICOM instance {} already exists, abort downloading.", sopInstanceUID); //$NON-NLS-1$
-                        } else {
+                        Integer frame = DicomMediaUtils.getIntegerFromDicomElement(instance, Tag.InstanceNumber, null);
+                        SopInstance sop = seriesInstanceList.getSopInstance(sopInstanceUID, frame);
+                        if (sop == null) {
                             File file = toFileName(instance, reader);
                             if (file != null) {
                                 if (file.exists()) {
-                                    dcmInstance.setInstanceNumber(
-                                        DicomMediaUtils.getIntegerFromDicomElement(instance, Tag.InstanceNumber, -1));
-                                    dcmInstance.setDirectDownloadFile(file.toURI().toString());
-                                    dicomInstances.add(dcmInstance);
+                                    sop = new SopInstance(sopInstanceUID, frame);
+                                    sop.setDirectDownloadFile(file.toURI().toString());
+                                    seriesInstanceList.addSopInstance(sop);
                                     if (iconInstance == null) {
                                         // Icon Image Sequence (0088,0200). This Icon Image is representative of the
                                         // Image. Only a single Item is permitted in this Sequence.
@@ -215,7 +212,7 @@ public class DicomDirLoader {
                     instance = findNextSiblingRecord(instance, reader);
                 }
 
-                if (!dicomInstances.isEmpty()) {
+                if (!seriesInstanceList.isEmpty()) {
                     dicomSeries.setTag(TagW.DirectDownloadThumbnail, readDicomDirIcon(iconInstance));
                     dicomSeries.setTag(TagW.ReadFromDicomdir, true);
                     final LoadSeries loadSeries = new LoadSeries(dicomSeries, dicomModel, 1, writeInCache);
@@ -249,7 +246,7 @@ public class DicomDirLoader {
                     if (thumbnailPath != null) {
                         int width = iconInstance.getInt(Tag.Columns, 0);
                         int height = iconInstance.getInt(Tag.Rows, 0);
-                        if (width != 0 && height != 0) {
+                        if (width != 0 && height != 0) {          
                             WritableRaster raster =
                                 Raster.createInterleavedRaster(DataBuffer.TYPE_BYTE, width, height, 1, new Point(0, 0));
                             raster.setDataElements(0, 0, width, height, pixelData);
@@ -257,8 +254,7 @@ public class DicomDirLoader {
                                 .fromString(iconInstance.getString(Tag.PhotometricInterpretation, "MONOCHROME2")); //$NON-NLS-1$
                             BufferedImage thumbnail = new BufferedImage(
                                 pmi.createColorModel(8, DataBuffer.TYPE_BYTE, iconInstance), raster, false, null);
-                            if (ImageFiler.writeJPG(thumbnailPath,
-                                DicomImageUtils.getRGBImageFromPaletteColorModel(thumbnail, iconInstance), 0.75f)) {
+                            if (ImageProcessor.writeImage(thumbnail, thumbnailPath)) {
                                 return thumbnailPath.getPath();
                             }
                         }

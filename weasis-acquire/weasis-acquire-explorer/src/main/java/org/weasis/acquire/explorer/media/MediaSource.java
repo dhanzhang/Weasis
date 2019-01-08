@@ -1,4 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.explorer.media;
+
+import java.util.Objects;
 
 import javax.swing.Icon;
 
@@ -16,13 +28,10 @@ public abstract class MediaSource {
     protected Icon icon;
 
     public MediaSource(String id) {
-        if (id == null || id.equals("")) {
-            throw new IllegalArgumentException();
-        }
-        this.id = id;
+        this.id = Objects.requireNonNull(id);
     }
 
-    final public String getID() {
+    public final String getID() {
         return id;
     }
 
@@ -31,7 +40,7 @@ public abstract class MediaSource {
     }
 
     public String getDescription() {
-        return description != null ? description : "";
+        return description != null ? description : ""; //$NON-NLS-1$
     }
 
     public Icon getIcon() {
@@ -39,16 +48,26 @@ public abstract class MediaSource {
     }
 
     @Override
-    final public boolean equals(Object obj) {
-        if (obj instanceof MediaSource) {
-            return getID().equals(((MediaSource) obj).getID());
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
         }
-        return super.equals(obj);
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        MediaSource other = (MediaSource) obj;
+        return id.equals(other.id);
     }
 
     @Override
-    final public int hashCode() {
-        return getID().hashCode();
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + id.hashCode();
+        return result;
     }
 
     @Override

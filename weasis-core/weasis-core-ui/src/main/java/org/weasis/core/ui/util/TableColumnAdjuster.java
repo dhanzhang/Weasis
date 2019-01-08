@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.util;
 
 import java.awt.Point;
@@ -22,6 +22,9 @@ public class TableColumnAdjuster {
     public static final int ALL_ROWS = 1;
     public static final int NO_ROWS = 2;
 
+    private TableColumnAdjuster() {
+    }
+
     private static int preferredWidth(JTable table, int col) {
         TableColumn tableColumn = table.getColumnModel().getColumn(col);
         int width = (int) table.getTableHeader().getDefaultRenderer()
@@ -29,10 +32,9 @@ public class TableColumnAdjuster {
             .getWidth();
 
         if (table.getRowCount() != 0) {
-            int from = 0, to = 0;
             Rectangle rect = table.getVisibleRect();
-            from = table.rowAtPoint(rect.getLocation());
-            to = table.rowAtPoint(new Point((int) rect.getMaxX(), (int) rect.getMaxY())) + 1;
+            int from = table.rowAtPoint(rect.getLocation());
+            int to = table.rowAtPoint(new Point((int) rect.getMaxX(), (int) rect.getMaxY())) + 1;
 
             for (int row = from; row < to; row++) {
                 int preferedWidth = (int) table.getCellRenderer(row, col)
@@ -50,7 +52,7 @@ public class TableColumnAdjuster {
             return;
         }
 
-        int width[] = new int[table.getColumnCount()];
+        int[] width = new int[table.getColumnCount()];
         int total = 0;
         for (int col = 0; col < width.length; col++) {
             width[col] = preferredWidth(table, col);

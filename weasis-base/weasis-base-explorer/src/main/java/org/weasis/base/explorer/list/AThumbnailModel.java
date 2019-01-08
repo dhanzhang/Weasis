@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.base.explorer.list;
 
 import java.io.IOException;
@@ -24,7 +34,7 @@ import org.weasis.core.api.media.data.MediaReader;
 import org.weasis.core.ui.editor.ViewerPluginBuilder;
 
 @SuppressWarnings({ "serial" })
-public abstract class AThumbnailModel<E extends MediaElement<?>> extends AbstractListModel<E>
+public abstract class AThumbnailModel<E extends MediaElement> extends AbstractListModel<E>
     implements IThumbnailModel<E> {
     private static final Logger LOGGER = LoggerFactory.getLogger(AThumbnailModel.class);
 
@@ -33,9 +43,13 @@ public abstract class AThumbnailModel<E extends MediaElement<?>> extends Abstrac
 
     protected final JList<E> list;
     protected final DefaultListModel<E> listModel;
+    protected final JIThumbnailCache thumbCache;
 
-    public AThumbnailModel(final JList<E> list) {
+    public AThumbnailModel(JList<E> list, JIThumbnailCache thumbCache) {
         this.list = list;
+        this.thumbCache = thumbCache;
+        // Fix list reselection interval when dragging
+        this.list.putClientProperty("List.isFileList", Boolean.TRUE); //$NON-NLS-1$
         listModel = new DefaultListModel<>();
         list.setModel(listModel);
     }
@@ -78,17 +92,23 @@ public abstract class AThumbnailModel<E extends MediaElement<?>> extends Abstrac
 
     @Override
     public E getElementAt(final int index) {
+        if(listModel.isEmpty()) {
+            return null;
+        }
         return listModel.getElementAt(index);
     }
 
     @Override
     public void clear() {
-        for (int i = 0; i < listModel.size(); i++) {
-            E m = listModel.getElementAt(i);
-            if (m instanceof ImageElement) {
-                JIThumbnailCache.removeInQueue((ImageElement) m);
+        if (thumbCache != null) {
+            for (int i = 0; i < listModel.size(); i++) {
+                E m = listModel.getElementAt(i);
+                if (m instanceof ImageElement) {
+                    thumbCache.removeInQueue((ImageElement) m);
+                }
             }
         }
+        list.getSelectionModel().clearSelection();
         listModel.clear();
     }
 
@@ -109,6 +129,9 @@ public abstract class AThumbnailModel<E extends MediaElement<?>> extends Abstrac
 
     @Override
     public boolean removeElement(E obj) {
+        if (thumbCache != null && obj instanceof ImageElement) {
+            thumbCache.removeInQueue((ImageElement) obj);
+        }
         return listModel.removeElement(obj);
     }
 
@@ -136,7 +159,7 @@ public abstract class AThumbnailModel<E extends MediaElement<?>> extends Abstrac
                     }
                 });
         } catch (IOException e) {
-            LOGGER.error("Building child directories", e);
+            LOGGER.error("Building child directories", e); //$NON-NLS-1$
         }
     }
 

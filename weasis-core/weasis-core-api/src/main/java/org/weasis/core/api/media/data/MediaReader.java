@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse  License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.media.data;
 
 import java.io.File;
@@ -15,8 +15,9 @@ import java.net.URI;
 import java.util.Map;
 
 import org.weasis.core.api.explorer.model.DataExplorerModel;
+import org.weasis.opencv.data.PlanarImage;
 
-public interface MediaReader<E> extends Tagable {
+public interface MediaReader extends Tagable {
 
     void reset();
 
@@ -24,15 +25,15 @@ public interface MediaReader<E> extends Tagable {
 
     FileCache getFileCache();
 
-    MediaElement<?>[] getMediaElement();
+    MediaElement[] getMediaElement();
 
-    MediaSeries<? extends MediaElement<E>> getMediaSeries();
+    MediaSeries<MediaElement> getMediaSeries();
 
     boolean delegate(DataExplorerModel explorerModel);
 
-    MediaElement<E> getPreview();
+    MediaElement getPreview();
 
-    E getMediaFragment(MediaElement<E> media) throws Exception;
+    PlanarImage getImageFragment(MediaElement media) throws Exception;
 
     int getMediaElementNumber();
 

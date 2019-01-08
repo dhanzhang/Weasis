@@ -1,16 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.service;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 
 import org.osgi.framework.BundleContext;
@@ -178,5 +179,18 @@ public class BundlePreferences {
                 pref.putLong(key, value);
             }
         }
+    }
+
+    public static boolean isNullStaticFieldValue(Class<?> clazz, String fieldName) {
+        try {
+            Field instance = clazz.getDeclaredField(fieldName);
+            if (instance != null) {
+                instance.setAccessible(true);
+                return instance.get(null) == null;
+            }
+        } catch (Exception e) {
+            LOGGER.error("Checking static field value", e); //$NON-NLS-1$
+        }
+        return false;
     }
 }

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2015 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.weasis.core.ui.util;
 
@@ -26,7 +26,12 @@ import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.SwingConstants;
 
+import org.weasis.core.api.gui.Insertable;
+
+@SuppressWarnings("serial")
 public class WtoolBar extends JPanel implements Toolbar {
+
+    public static final Dimension SEPARATOR_2x24 = new Dimension(2, 24);
 
     private final String barName;
 
@@ -34,6 +39,8 @@ public class WtoolBar extends JPanel implements Toolbar {
     private boolean rolloverBorderPainted = true;
     private boolean rolloverContentAreaFilled = true;
     private boolean useCustomUI = true;
+
+    private Insertable attachedInsertable;
 
     private transient MouseListener buttonMouseHandler = new MouseAdapter() {
 
@@ -86,13 +93,21 @@ public class WtoolBar extends JPanel implements Toolbar {
         this.barPosition = position;
     }
 
+    public Insertable getAttachedInsertable() {
+        return attachedInsertable;
+    }
+
+    public void setAttachedInsertable(Insertable attachedInsertable) {
+        this.attachedInsertable = attachedInsertable;
+    }
+
     public void addSeparator(Dimension dim) {
         JSeparator s = new JSeparator(SwingConstants.VERTICAL);
         s.setPreferredSize(dim);
         add(s);
     }
 
-    /** Overriden to track AbstractButton added */
+    /** Overridden to track AbstractButton added */
     @Override
     public Component add(Component comp) {
         if (comp instanceof AbstractButton) {
@@ -111,7 +126,7 @@ public class WtoolBar extends JPanel implements Toolbar {
         }
         super.add(button);
         if (substanceLaf) {
-            button.putClientProperty("substancelaf.componentFlat", Boolean.TRUE); //$NON-NLS-1$
+            button.putClientProperty("substancelaf.internal.FlatLook", Boolean.TRUE); //$NON-NLS-1$
         } else {
             configureButton(button);
             installMouseHandler(button);
@@ -129,7 +144,7 @@ public class WtoolBar extends JPanel implements Toolbar {
     /**
      * Install custom UI for this button : a light rollover effet and a custom rounded/shaded border.
      * <p>
-     * This method can be overriden to replace the provided "look and feel" which uses the follwing configuration :
+     * This method can be overridden to replace the provided "look and feel" which uses the follwing configuration :
      * <ul>
      * <li>install a VLButtonUI
      * <li>set 2 pixels margins
@@ -138,14 +153,14 @@ public class WtoolBar extends JPanel implements Toolbar {
      */
     public static void installButtonUI(AbstractButton button) {
         button.setMargin(new Insets(2, 2, 2, 2));
-        button.setUI(new VLButtonUI());
+        button.setUI(new RolloverButtonUI());
         button.setBorder(new ToolBarButtonBorder());
     }
 
     /**
      * Used internally to add a mouse listener to the button.
      * <p>
-     * Can be overriden to implement custom event handling.
+     * Can be overridden to implement custom event handling.
      */
 
     public void installMouseHandler(AbstractButton button) {
@@ -153,7 +168,7 @@ public class WtoolBar extends JPanel implements Toolbar {
     }
 
     /**
-     * This method is invoked upon adding a button to the toolbar. It can be overriden to provide another look or feel.
+     * This method is invoked upon adding a button to the toolbar. It can be overridden to provide another look or feel.
      * <p>
      * Default settings are :
      * <ul>
@@ -193,7 +208,7 @@ public class WtoolBar extends JPanel implements Toolbar {
      * <p>
      * If true, when one of the toolbar buttons is rolled-over, its content will be filled.
      * <p>
-     * Default value is <b>false</b> to accomodate with VLButtonUI which paints itself the button interiors.
+     * Default value is <b>false</b> to accommodate with VLButtonUI which paints itself the button interiors.
      *
      */
 

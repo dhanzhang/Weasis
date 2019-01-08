@@ -1,16 +1,25 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.sr;
 
 import java.util.Map;
 
 import javax.swing.Icon;
-import javax.swing.ImageIcon;
 
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Property;
-import org.apache.felix.scr.annotations.Service;
+import org.osgi.service.component.ComponentContext;
+import org.osgi.service.component.annotations.Deactivate;
 import org.weasis.core.api.explorer.DataExplorerView;
 import org.weasis.core.api.explorer.model.DataExplorerModel;
 import org.weasis.core.api.image.GridBagLayoutModel;
+import org.weasis.core.api.media.MimeInspector;
 import org.weasis.core.api.media.data.MediaElement;
 import org.weasis.core.ui.docking.UIManager;
 import org.weasis.core.ui.editor.SeriesViewer;
@@ -19,20 +28,18 @@ import org.weasis.core.ui.editor.ViewerPluginBuilder;
 import org.weasis.dicom.explorer.DicomExplorer;
 import org.weasis.dicom.explorer.DicomModel;
 
-@Component(immediate = false)
-@Service
-@Property(name = "service.name", value = "DICOM SR Viewer")
+@org.osgi.service.component.annotations.Component(service = SeriesViewerFactory.class, immediate = false)
 public class SRFactory implements SeriesViewerFactory {
 
     public static final String NAME = Messages.getString("SRFactory.viewer"); //$NON-NLS-1$
-    public static final Icon ICON = new ImageIcon(MediaElement.class.getResource("/icon/22x22/text-x-generic.png")); //$NON-NLS-1$
 
     public SRFactory() {
+        super();
     }
 
     @Override
     public Icon getIcon() {
-        return ICON;
+        return MimeInspector.textIcon;
     }
 
     @Override
@@ -46,7 +53,7 @@ public class SRFactory implements SeriesViewerFactory {
     }
 
     @Override
-    public SeriesViewer<? extends MediaElement<?>> createSeriesViewer(Map<String, Object> properties) {
+    public SeriesViewer<?> createSeriesViewer(Map<String, Object> properties) {
         GridBagLayoutModel model = SRContainer.VIEWS_1x1;
         String uid = null;
         if (properties != null) {
@@ -87,7 +94,7 @@ public class SRFactory implements SeriesViewerFactory {
     }
 
     @Override
-    public boolean isViewerCreatedByThisFactory(SeriesViewer<? extends MediaElement<?>> viewer) {
+    public boolean isViewerCreatedByThisFactory(SeriesViewer<? extends MediaElement> viewer) {
         if (viewer instanceof SRContainer) {
             return true;
         }
@@ -107,6 +114,15 @@ public class SRFactory implements SeriesViewerFactory {
     @Override
     public boolean canExternalizeSeries() {
         return true;
+    }
+
+    // ================================================================================
+    // OSGI service implementation
+    // ================================================================================
+
+    @Deactivate
+    protected void deactivate(ComponentContext context) {
+        UIManager.closeSeriesViewerType(SRContainer.class);
     }
 
 }

@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.imp.suite;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,10 +28,10 @@ import org.weasis.core.ui.test.utils.ModelListHelper;
 
 @RunWith(PowerMockRunner.class)
 public class ConstructorImageElementSuite extends ModelListHelper {
-    
+
     @Test
     public void test_image_with_uuid_and_series_uuid() throws Exception {
-        ImageElement img = mockImage(UUID_1, UUID_2);                   
+        ImageElement img = mockImage(UUID_1, UUID_2);
         GraphicModel actual = new XmlGraphicModel(img);
 
         assertThat(actual).isNotNull();
@@ -42,8 +52,6 @@ public class ConstructorImageElementSuite extends ModelListHelper {
         assertThat(actual.getGraphicSelectionListeners()).isEmpty();
 
         assertThat(actual.getSelectGraphic()).isEqualTo(Optional.empty());
-
-        assertThat(actual.getCreateGraphic()).isNull();
 
         assertThat(actual.getLayerCount()).isEqualTo(0);
     }
@@ -78,8 +86,6 @@ public class ConstructorImageElementSuite extends ModelListHelper {
 
         assertThat(actual.getSelectGraphic()).isEqualTo(Optional.empty());
 
-        assertThat(actual.getCreateGraphic()).isNull();
-
         assertThat(actual.getLayerCount()).isEqualTo(0);
 
     }
@@ -111,8 +117,6 @@ public class ConstructorImageElementSuite extends ModelListHelper {
         assertThat(actual.getGraphicSelectionListeners()).isEmpty();
 
         assertThat(actual.getSelectGraphic()).isEqualTo(Optional.empty());
-
-        assertThat(actual.getCreateGraphic()).isNull();
 
         assertThat(actual.getLayerCount()).isEqualTo(0);
 
@@ -146,10 +150,7 @@ public class ConstructorImageElementSuite extends ModelListHelper {
 
         assertThat(actual.getSelectGraphic()).isEqualTo(Optional.empty());
 
-        assertThat(actual.getCreateGraphic()).isNull();
-
         assertThat(actual.getLayerCount()).isEqualTo(0);
     }
 
-    
 }

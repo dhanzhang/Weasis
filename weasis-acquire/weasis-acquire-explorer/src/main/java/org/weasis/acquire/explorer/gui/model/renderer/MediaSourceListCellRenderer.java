@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.explorer.gui.model.renderer;
 
 import java.awt.Component;
@@ -11,6 +21,7 @@ import org.weasis.acquire.explorer.media.MediaSource;
 
 public class MediaSourceListCellRenderer extends JLabel implements ListCellRenderer<MediaSource> {
     private static final long serialVersionUID = -8043563870643819771L;
+
     public MediaSourceListCellRenderer(JComboBox<MediaSource> combo) {
         setOpaque(true);
         setHorizontalAlignment(LEFT);
@@ -27,7 +38,7 @@ public class MediaSourceListCellRenderer extends JLabel implements ListCellRende
             setText(str);
         } else {
             setIcon(null);
-            setText("");
+            setText(""); //$NON-NLS-1$
         }
 
         setForeground(isSelected ? list.getSelectionForeground() : list.getForeground());

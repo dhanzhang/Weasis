@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.media;
 
 import java.io.BufferedReader;
@@ -18,9 +18,11 @@ import java.io.InputStreamReader;
 import java.io.RandomAccessFile;
 import java.io.Reader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
@@ -33,6 +35,9 @@ import org.weasis.core.api.internal.mime.InvalidMagicMimeEntryException;
 import org.weasis.core.api.internal.mime.MagicMimeEntry;
 import org.weasis.core.api.util.FileUtil;
 
+/**
+ * The Class MimeInspector is a manager for mime types.
+ */
 public class MimeInspector {
     private static final Logger LOGGER = LoggerFactory.getLogger(MimeInspector.class);
 
@@ -48,22 +53,21 @@ public class MimeInspector {
     public static final Icon videoIcon =
         new ImageIcon(MimeInspector.class.getResource("/icon/22x22/video-x-generic.png")); //$NON-NLS-1$
     public static final Icon dicomIcon = new ImageIcon(MimeInspector.class.getResource("/icon/22x22/dicom.png")); //$NON-NLS-1$
-    public static final Icon dicomVideo = new ImageIcon(MimeInspector.class.getResource("/icon/22x22/dicom-video.png")); //$NON-NLS-1$
     public static final Icon pdfIcon = new ImageIcon(MimeInspector.class.getResource("/icon/22x22/pdf.png")); //$NON-NLS-1$
-    private static Properties mimeTypes;
+    public static final Icon ecgIcon = new ImageIcon(MimeInspector.class.getResource("/icon/22x22/ecg.png")); //$NON-NLS-1$    
 
-    private static ArrayList<MagicMimeEntry> mMagicMimeEntries = new ArrayList<>();
+    private static final Properties mimeTypes = new Properties();
+    private static final ArrayList<MagicMimeEntry> mMagicMimeEntries = new ArrayList<>();
 
     // Initialize the class in preparation for mime type detection
     static {
-        mimeTypes = new Properties();
         InputStream fileStream = null;
         try {
             // Load the default supplied mime types
             fileStream = MimeInspector.class.getResourceAsStream("/mime-types.properties"); //$NON-NLS-1$
             mimeTypes.load(fileStream);
         } catch (IOException e) {
-            LOGGER.error("Error when reading mime-types", e);
+            LOGGER.error("Error when reading mime-types", e); //$NON-NLS-1$
         } finally {
             FileUtil.safeClose(fileStream);
         }
@@ -71,12 +75,15 @@ public class MimeInspector {
         // Parse and initialize the magic.mime rules
         InputStream is = MimeInspector.class.getResourceAsStream("/magic.mime"); //$NON-NLS-1$
         if (is != null) {
-            try (InputStreamReader streamReader = new InputStreamReader(is, "UTF8")) {
+            try (InputStreamReader streamReader = new InputStreamReader(is, "UTF8")) { //$NON-NLS-1$
                 MimeInspector.parse(streamReader); // $NON-NLS-1$
             } catch (Exception e) {
-                LOGGER.error("Parse magic mime-types", e);
+                LOGGER.error("Parse magic mime-types", e); //$NON-NLS-1$
             }
         }
+    }
+
+    private MimeInspector() {
     }
 
     public static boolean isMatchingMimeTypeFromMagicNumber(final File file, String mimeType) {
@@ -93,7 +100,24 @@ public class MimeInspector {
                     return true;
                 }
             } catch (IOException e) {
-                LOGGER.error("", e);
+                LOGGER.error("", e); //$NON-NLS-1$
+            }
+        }
+        return false;
+    }
+
+    public static boolean isMatchingMimeTypeFromMagicNumber(final byte[] byteArray, String mimeType) {
+        if (byteArray == null || byteArray.length == 0 || mimeType == null) {
+            return false;
+        }
+        MagicMimeEntry me = getMagicMimeEntry(mimeType);
+        if (me != null) {
+            try {
+                if (mimeType.equals(me.getMatch(byteArray))) {
+                    return true;
+                }
+            } catch (IOException e) {
+                LOGGER.error("", e); //$NON-NLS-1$
             }
         }
         return false;
@@ -111,7 +135,7 @@ public class MimeInspector {
         try (RandomAccessFile raf = new RandomAccessFile(file, "r")) {//$NON-NLS-1$
             mimeType = MimeInspector.getMagicMimeType(raf);
         } catch (IOException e) {
-            LOGGER.error("Error when getting mime-type", e);
+            LOGGER.error("Error when getting mime-type", e); //$NON-NLS-1$
         }
         return mimeType;
     }
@@ -123,21 +147,17 @@ public class MimeInspector {
 
         // Get the file extension
         String fileName = file.getName();
-        int lastPos = fileName.lastIndexOf("."); //$NON-NLS-1$
+        int lastPos = fileName.lastIndexOf('.'); 
         String extension = lastPos > 0 ? fileName.substring(lastPos + 1).trim() : null;
 
-        String mimeType;
         // Get Mime Type form the extension if the length > 0 and < 5
         if (extension != null && extension.length() > 0 && extension.length() < 5) {
-            mimeType = mimeTypes.getProperty(extension.toLowerCase());
+            String mimeType = mimeTypes.getProperty(extension.toLowerCase());
             if (mimeType != null) {
                 String[] mimes = mimeType.split(","); //$NON-NLS-1$
                 // When several Mimes for an extension, try to find from magic number
                 if (mimes.length > 1) {
-                    mimeType = getMimeTypeFromMagicNumber(file);
-                    if (mimeType == null) {
-                        mimeType = mimes[0];
-                    }
+                    return Optional.ofNullable(getMimeTypeFromMagicNumber(file)).orElse(mimes[0]);
                 }
                 return mimeType;
             }
@@ -147,10 +167,9 @@ public class MimeInspector {
 
     private static void parse(Reader r) throws IOException {
         BufferedReader br = new BufferedReader(r);
-        String line;
         ArrayList<String> sequence = new ArrayList<>();
 
-        line = br.readLine();
+        String line = br.readLine();
         while (true) {
             if (line == null) {
                 break;
@@ -193,7 +212,7 @@ public class MimeInspector {
             MagicMimeEntry magicEntry = new MagicMimeEntry(aStringArray);
             mMagicMimeEntries.add(magicEntry);
         } catch (InvalidMagicMimeEntryException e) {
-            LOGGER.error("Error when adding mime {}", aStringArray, e);
+            LOGGER.error("Error when adding mime {}", aStringArray, e); //$NON-NLS-1$
         }
     }
 
@@ -224,7 +243,7 @@ public class MimeInspector {
         if (mimeType == null) {
             return ""; //$NON-NLS-1$
         }
-        int offset = mimeType.indexOf("/"); //$NON-NLS-1$
+        int offset = mimeType.indexOf('/'); 
         if (offset == -1) {
             return mimeType;
         } else {
@@ -237,7 +256,7 @@ public class MimeInspector {
         if (mimeType == null) {
             return ""; //$NON-NLS-1$
         }
-        int offset = mimeType.indexOf("/"); //$NON-NLS-1$
+        int offset = mimeType.indexOf('/'); 
         if (offset == -1) {
             return mimeType;
         } else {
@@ -248,7 +267,7 @@ public class MimeInspector {
     // Utility method that gets the extension of a file from its name if it has one
     public static String getFileExtension(String fileName) {
         int lastPos;
-        if (fileName == null || (lastPos = fileName.lastIndexOf(".")) < 0) { //$NON-NLS-1$
+        if (fileName == null || (lastPos = fileName.lastIndexOf('.')) < 0) { 
             return null;
         }
         String extension = fileName.substring(lastPos + 1);
@@ -270,11 +289,7 @@ public class MimeInspector {
             String key = (String) entry.getKey();
             String val = (String) entry.getValue();
             if (val != null) {
-                for (String m : mimes) {
-                    if (val.equals(m)) {
-                        list.add(key);
-                    }
-                }
+                Arrays.stream(mimes).filter(val::equals).forEach(s -> list.add(key));
             }
         }
         return list;

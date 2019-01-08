@@ -1,41 +1,37 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.imageio.codec;
 
 import java.net.URI;
-import java.util.ArrayList;
 import java.util.Hashtable;
-import java.util.List;
 
 import javax.imageio.ImageIO;
 
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Property;
-import org.apache.felix.scr.annotations.Service;
+import org.osgi.service.component.ComponentContext;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Deactivate;
+import org.weasis.core.api.image.cv.ImageCVIO;
 import org.weasis.core.api.media.data.Codec;
 import org.weasis.core.api.media.data.MediaReader;
 
-@Component(immediate = false)
-@Service
-@Property(name = "service.name", value = "Imageio Codec (additionnal java packages)")
+import com.sun.media.imageioimpl.common.ImageioUtil;
+import com.sun.media.imageioimpl.stream.ChannelImageInputStreamSpi;
+import com.sun.media.imageioimpl.stream.ChannelImageOutputStreamSpi;
+
+@org.osgi.service.component.annotations.Component(service = Codec.class, immediate = false)
 public class ImageioCodec implements Codec {
 
     @Override
     public String[] getReaderMIMETypes() {
-        List<String> list = new ArrayList<String>();
-        for (String s : ImageIO.getReaderMIMETypes()) {
-            list.add(s);
-        }
-        list.add("image/x-ms-bmp"); //$NON-NLS-1$
-        return list.toArray(new String[list.size()]);
+        return ImageIO.getReaderMIMETypes();
     }
 
     @Override
@@ -58,7 +54,7 @@ public class ImageioCodec implements Codec {
     @Override
     public MediaReader getMediaIO(URI media, String mimeType, Hashtable<String, Object> properties) {
         if (isMimeTypeSupported(mimeType)) {
-            return new ImageElementIO(media, mimeType, this);
+            return new ImageCVIO(media, mimeType, this);
         }
         return null;
     }
@@ -76,6 +72,35 @@ public class ImageioCodec implements Codec {
     @Override
     public String[] getWriterMIMETypes() {
         return ImageIO.getWriterMIMETypes();
+    }
+
+    // ================================================================================
+    // OSGI service implementation
+    // ================================================================================
+
+    @Activate
+    protected void activate(ComponentContext context) {
+        // Do not use cache. Images must be download locally before reading them.
+        ImageIO.setUseCache(false);
+
+        // SPI Issue Resolution
+        // Register imageio SPI with the classloader of this bundle
+        // and unregister imageio SPI if imageio.jar is also in the jre/lib/ext folder
+
+        Class<?>[] jaiCodecs = { ChannelImageInputStreamSpi.class, ChannelImageOutputStreamSpi.class };
+
+        for (Class<?> c : jaiCodecs) {
+            ImageioUtil.registerServiceProvider(c);
+        }
+    }
+
+    @Deactivate
+    protected void deactivate(ComponentContext context) {
+        Class<?>[] jaiCodecs = { ChannelImageInputStreamSpi.class, ChannelImageOutputStreamSpi.class };
+
+        for (Class<?> c : jaiCodecs) {
+            ImageioUtil.unRegisterServiceProvider(c);
+        }
     }
 
 }

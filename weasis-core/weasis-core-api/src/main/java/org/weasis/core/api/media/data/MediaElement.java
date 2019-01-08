@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.media.data;
 
 import java.io.File;
@@ -22,24 +22,24 @@ import java.util.Optional;
 
 import org.weasis.core.api.util.FileUtil;
 
-public abstract class MediaElement<E> implements Tagable {
+public class MediaElement implements Tagable {
 
     // Metadata of the media
     protected final Map<TagW, Object> tags;
     // Reader of the media (local or remote)
-    protected final MediaReader<E> mediaIO;
+    protected final MediaReader mediaIO;
     // Key to identify the media (the URI passed to the Reader can contain several media elements)
     protected final Object key;
 
     private volatile boolean loading = false;
 
-    public MediaElement(MediaReader<E> mediaIO, Object key) {
+    public <E> MediaElement(MediaReader mediaIO, Object key) {
         this.mediaIO = Objects.requireNonNull(mediaIO);
         this.key = key;
-        this.tags = Optional.ofNullable(mediaIO.getMediaFragmentTags(key)).orElse(new HashMap<TagW, Object>());
+        this.tags = Optional.ofNullable(mediaIO.getMediaFragmentTags(key)).orElseGet(HashMap::new);
     }
 
-    public MediaReader<E> getMediaReader() {
+    public MediaReader getMediaReader() {
         return mediaIO;
     }
 
@@ -87,7 +87,11 @@ public abstract class MediaElement<E> implements Tagable {
         tags.clear();
     }
 
-    public abstract void dispose();
+    public void dispose() {
+        // Close image reader and image stream, but it should be already closed
+        mediaIO.close();
+        mediaIO.getFileCache().dispose();
+    }
 
     public URI getMediaURI() {
         return mediaIO.getUri();
@@ -95,7 +99,7 @@ public abstract class MediaElement<E> implements Tagable {
 
     /**
      * This file can be the result of a processing like downloading, tiling or uncompressing.
-     * 
+     *
      * @return the final file that has been load by the reader.
      */
     public File getFile() {

@@ -1,6 +1,15 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.explorer.gui.model.list;
 
-import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 
 import javax.swing.ComboBoxModel;
@@ -10,7 +19,7 @@ import org.weasis.acquire.explorer.core.ItemList.Interval;
 
 public class ItemListComboBoxModel<T> extends ItemListModel<T> implements ComboBoxModel<T> {
     private static final long serialVersionUID = -7664267643457177724L;
-    
+
     private T selectedItem = null;
     private T lastSelectedItem = null;
 
@@ -52,51 +61,41 @@ public class ItemListComboBoxModel<T> extends ItemListModel<T> implements ComboB
     }
 
     @Override
-    protected PropertyChangeListener getItemListChangeListener() {
-        if (itemListChangeListener == null) {
-            itemListChangeListener = new PropertyChangeListener() {
-                @Override
-                public void propertyChange(PropertyChangeEvent evt) {
+    protected PropertyChangeListener getPropertyChangeListener() {
+        return evt -> {
+            if (evt.getNewValue() instanceof Interval) {
+                Interval interval = (Interval) evt.getNewValue();
 
-                    if (evt.getNewValue() instanceof Interval) {
-                        Interval interval = (Interval) evt.getNewValue();
-
-                        switch (ItemList.eProperty.valueOf(evt.getPropertyName())) {
-                            case INTERVAL_ADDED:
-                                fireIntervalAdded(ItemListComboBoxModel.this, interval.index0, interval.index1);
-                                if (selectedItem == null && itemList.getSize() > 0) {
-                                    setSelectedItem(itemList.getLastItem());
-                                }
-                                break;
-                            case INTERVAL_REMOVED:
-                                for (int i = interval.index0; i <= interval.index1; i++) {
-                                    T item = itemList.getItem(i);
-                                    if (item != null && item.equals(selectedItem)) {
-                                        int lastSelectionIndex = itemList.getIndex(lastSelectedItem);
-                                        if ((interval.index0 <= lastSelectionIndex
-                                            && interval.index1 >= lastSelectionIndex)) {
-                                            setSelectedItem(null);
-                                        } else {
-                                            setSelectedItem(lastSelectedItem);
-                                        }
-                                        // setSelectedItem(getSize() > 0 ? itemList.getFirstItem() : null);
-                                        break;
-                                    }
-                                }
-                                // if (!itemList.containsItem(selectedItem))
-                                // setSelectedItem(getSize() > 0 ? itemList.getFirstItem() : null);
-                                fireIntervalRemoved(ItemListComboBoxModel.this, interval.index0, interval.index1);
-                                break;
-                            case CONTENT_CHANGED:
-                                fireContentsChanged(ItemListComboBoxModel.this, interval.index0, interval.index1);
-                                // note : used by JComboBox only to check if selectedItem has changed but not used by
-                                // the renderer
-                                break;
+                switch (ItemList.eProperty.valueOf(evt.getPropertyName())) {
+                    case INTERVAL_ADDED:
+                        fireIntervalAdded(ItemListComboBoxModel.this, interval.getMin(), interval.getMax());
+                        if (selectedItem == null && itemList.getSize() > 0) {
+                            setSelectedItem(itemList.getLastItem());
                         }
-                    }
+                        break;
+                    case INTERVAL_REMOVED:
+                        for (int i = interval.getMin(); i <= interval.getMax(); i++) {
+                            T item = itemList.getItem(i);
+                            if (item != null && item.equals(selectedItem)) {
+                                int lastSelectionIndex = itemList.getIndex(lastSelectedItem);
+                                if (interval.getMin() <= lastSelectionIndex
+                                    && interval.getMax() >= lastSelectionIndex) {
+                                    setSelectedItem(null);
+                                } else {
+                                    setSelectedItem(lastSelectedItem);
+                                }
+                                break;
+                            }
+                        }
+                        fireIntervalRemoved(ItemListComboBoxModel.this, interval.getMin(), interval.getMax());
+                        break;
+                    case CONTENT_CHANGED:
+                        fireContentsChanged(ItemListComboBoxModel.this, interval.getMin(), interval.getMax());
+                        // note : used by JComboBox only to check if selectedItem has changed but not used by
+                        // the renderer
+                        break;
                 }
-            };
-        }
-        return itemListChangeListener;
+            }
+        };
     }
 }

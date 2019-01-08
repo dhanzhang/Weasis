@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.pref;
 
 import java.awt.Component;
@@ -35,8 +35,6 @@ import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.UIManager.LookAndFeelInfo;
-import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.StyleSheet;
 
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
@@ -71,7 +69,7 @@ public class GeneralSetting extends AbstractItemDialogPage {
     @SuppressWarnings("serial")
     private final JLocaleFormat comboBoxFormat = new JLocaleFormat() {
         @Override
-        protected void valueHasChanged() {
+        public void valueHasChanged() {
             txtpnNote.setText(getText());
         }
     };
@@ -101,9 +99,10 @@ public class GeneralSetting extends AbstractItemDialogPage {
     private final Component horizontalStrut1 = Box.createHorizontalStrut(10);
     private final Component horizontalStrut2 = Box.createHorizontalStrut(10);
     private final JPanel panel1 = new JPanel();
-    private final JLabel lblStacktraceLimit = new JLabel("Stacktrace Limit" + StringUtil.COLON);
+    private final JLabel lblStacktraceLimit =
+        new JLabel(Messages.getString("GeneralSetting.stack_limit") + StringUtil.COLON); //$NON-NLS-1$
     private final JComboBox<String> comboBoxStackLimit =
-        new JComboBox<>(new String[] { "", "0", "1", "3", "5", "10", "20", "50", "100" });
+        new JComboBox<>(new String[] { "", "0", "1", "3", "5", "10", "20", "50", "100" }); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$ //$NON-NLS-4$ //$NON-NLS-5$ //$NON-NLS-6$ //$NON-NLS-7$ //$NON-NLS-8$ //$NON-NLS-9$
 
     public GeneralSetting() {
         super(pageName);
@@ -117,14 +116,9 @@ public class GeneralSetting extends AbstractItemDialogPage {
         } catch (Exception e) {
             LOGGER.error("Cannot initialize GeneralSetting", e); //$NON-NLS-1$
         }
-        // Object comp = jComboBoxlnf.getUI().getAccessibleChild(jComboBoxlnf, 0);
-        // if (comp instanceof BasicComboPopup) {
-        // BasicComboPopup popup = (BasicComboPopup) comp;
-        // popup.getList().getSelectionModel().addListSelectionListener(listSelectionListener);
-        // }
     }
 
-    private void jbInit() throws Exception {
+    private void jbInit() {
         this.setLayout(gridBagLayout1);
         jLabelMLook.setText(Messages.getString("GeneralSetting.lf") + StringUtil.COLON); //$NON-NLS-1$
 
@@ -185,16 +179,9 @@ public class GeneralSetting extends AbstractItemDialogPage {
         gbcTxtpnNote.fill = GridBagConstraints.HORIZONTAL;
         gbcTxtpnNote.gridx = 0;
         gbcTxtpnNote.gridy = 3;
-        txtpnNote.setEditable(false);
+        txtpnNote.setEditorKit(JMVUtils.buildHTMLEditorKit(txtpnNote));
         txtpnNote.setContentType("text/html"); //$NON-NLS-1$
-
-        HTMLEditorKit kit = new HTMLEditorKit();
-        StyleSheet ss = kit.getStyleSheet();
-        ss.addRule("body {font-family:sans-serif;font-size:12pt;background-color:#" //$NON-NLS-1$
-            + Integer.toHexString((txtpnNote.getBackground().getRGB() & 0xffffff) | 0x1000000).substring(1) + ";color:#" //$NON-NLS-1$
-            + Integer.toHexString((txtpnNote.getForeground().getRGB() & 0xffffff) | 0x1000000).substring(1)
-            + ";margin:3;font-weight:normal;}"); //$NON-NLS-1$
-        txtpnNote.setEditorKit(kit);
+        txtpnNote.setEditable(false);
         txtpnNote.setText(getText());
         add(txtpnNote, gbcTxtpnNote);
 
@@ -270,7 +257,7 @@ public class GeneralSetting extends AbstractItemDialogPage {
 
     }
 
-    private String getText() {
+    private static String getText() {
         ZonedDateTime now = ZonedDateTime.now();
         return String.format(Messages.getString("GeneralSetting.txtNote"), //$NON-NLS-1$
             new Object[] { LocalUtil.getDateTimeFormatter(FormatStyle.SHORT).format(now),
@@ -315,11 +302,11 @@ public class GeneralSetting extends AbstractItemDialogPage {
         panel1.add(lblStacktraceLimit);
 
         int limit = getIntPreferences(AuditLog.LOG_STACKTRACE_LIMIT, 3, null);
-        if (limit > 0
-            && (limit != 1 || limit != 3 || limit != 5 || limit != 10 || limit != 20 || limit != 50 || limit != 100)) {
+        if (limit > 0 && limit != 1 && limit != 3 && limit != 5 && limit != 10 && limit != 20 && limit != 50
+            && limit != 100) {
             comboBoxStackLimit.addItem(Integer.toString(limit));
         }
-        comboBoxStackLimit.setSelectedItem(limit >= 0 ? Integer.toString(limit) : "");// $NON-NLS-1$
+        comboBoxStackLimit.setSelectedItem(limit >= 0 ? Integer.toString(limit) : "");// $NON-NLS-1$ //$NON-NLS-1$
         panel1.add(comboBoxStackLimit);
         chckbxFileLog.setSelected(StringUtil.hasText(prfs.getProperty(AuditLog.LOG_FILE, ""))); //$NON-NLS-1$
         spinner.setValue(getIntPreferences(AuditLog.LOG_FILE_NUMBER, 5, null));
@@ -371,7 +358,7 @@ public class GeneralSetting extends AbstractItemDialogPage {
 
         String limit = (String) comboBoxStackLimit.getSelectedItem();
         BundleTools.SYSTEM_PREFERENCES.setProperty(AuditLog.LOG_STACKTRACE_LIMIT,
-            StringUtil.hasText(limit) ? limit : "-1");
+            StringUtil.hasText(limit) ? limit : "-1"); //$NON-NLS-1$
 
         LEVEL level = (LEVEL) comboBoxLogLevel.getSelectedItem();
         BundleTools.SYSTEM_PREFERENCES.setProperty(AuditLog.LOG_LEVEL, level.toString());
@@ -482,7 +469,7 @@ public class GeneralSetting extends AbstractItemDialogPage {
             LOGGER.error("Unable to set the Look&Feel", e); //$NON-NLS-1$
         }
         // Fix font issue for displaying some Asiatic characters. Some L&F have special fonts.
-        setUIFont(new javax.swing.plaf.FontUIResource("SansSerif", Font.PLAIN, 12)); //$NON-NLS-1$
+        setUIFont(new javax.swing.plaf.FontUIResource(Font.SANS_SERIF, Font.PLAIN, 12));
         return laf;
     }
 
@@ -498,7 +485,7 @@ public class GeneralSetting extends AbstractItemDialogPage {
             }
         }
         if (laf == null) {
-            if ("Mac OS X".equals(System.getProperty("os.name"))) { //$NON-NLS-1$ //$NON-NLS-2$
+            if (AppProperties.OPERATING_SYSTEM.startsWith("mac")) { //$NON-NLS-1$
                 laf = "com.apple.laf.AquaLookAndFeel"; //$NON-NLS-1$
             } else {
                 // Try to set Nimbus, concurrent thread issue

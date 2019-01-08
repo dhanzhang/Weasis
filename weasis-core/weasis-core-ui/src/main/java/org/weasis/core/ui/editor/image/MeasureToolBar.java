@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.editor.image;
 
 import java.awt.Component;
@@ -15,9 +15,7 @@ import java.awt.Dimension;
 import java.awt.Graphics;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Function;
 
 import javax.swing.AbstractButton;
 import javax.swing.Box;
@@ -35,7 +33,6 @@ import org.weasis.core.api.gui.util.DropButtonIcon;
 import org.weasis.core.api.gui.util.DropDownButton;
 import org.weasis.core.api.gui.util.GroupRadioMenu;
 import org.weasis.core.api.gui.util.RadioMenuItem;
-import org.weasis.core.api.media.data.ImageElement;
 import org.weasis.core.api.service.BundleTools;
 import org.weasis.core.api.service.WProperties;
 import org.weasis.core.ui.Messages;
@@ -62,18 +59,18 @@ import org.weasis.core.ui.model.layer.LayerType;
 import org.weasis.core.ui.pref.ViewSetting;
 import org.weasis.core.ui.util.WtoolBar;
 
-public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
+@SuppressWarnings("serial")
+public class MeasureToolBar extends WtoolBar {
     private static final long serialVersionUID = -6672565963157176685L;
 
     public static final SelectGraphic selectionGraphic = new SelectGraphic();
 
     public static final Icon MeasureIcon = new ImageIcon(MouseActions.class.getResource("/icon/32x32/measure.png")); //$NON-NLS-1$
-    public static final Icon drawIcon = new ImageIcon(MouseActions.class.getResource("/icon/32x32/measure.png")); //$NON-NLS-1$
+    public static final Icon drawIcon = new ImageIcon(MouseActions.class.getResource("/icon/32x32/draw.png")); //$NON-NLS-1$
     public static final List<Graphic> measureGraphicList = new ArrayList<>();
     public static final List<Graphic> drawGraphicList = new ArrayList<>();
 
     static {
-        selectionGraphic.setLayerType(LayerType.TEMP_DRAW);
         WProperties p = BundleTools.SYSTEM_PREFERENCES;
         if (p.getBooleanProperty("weasis.measure.selection", true)) { //$NON-NLS-1$
             measureGraphicList.add(selectionGraphic);
@@ -117,14 +114,18 @@ public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
         if (p.getBooleanProperty("weasis.measure.pixelinfo", true)) { //$NON-NLS-1$
             measureGraphicList.add(new PixelInfoGraphic());
         }
-        measureGraphicList.stream().filter(g -> Objects.isNull(g.getLayerType()))
-            .forEach(g -> g.setLayerType(LayerType.MEASURE));
+        measureGraphicList.forEach(g -> g.setLayerType(LayerType.MEASURE));
 
         if (p.getBooleanProperty("weasis.draw.selection", true)) { //$NON-NLS-1$
             drawGraphicList.add(selectionGraphic);
         }
         if (p.getBooleanProperty("weasis.draw.line", true)) { //$NON-NLS-1$
-            drawGraphicList.add(new LineGraphic());
+            drawGraphicList.add(new LineGraphic() {
+                @Override
+                public int getKeyCode() {
+                    return 0;
+                }
+            });
         }
         if (p.getBooleanProperty("weasis.draw.polyline", true)) { //$NON-NLS-1$
             drawGraphicList.add(new PolylineGraphic());
@@ -139,34 +140,41 @@ public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
             drawGraphicList.add(new ThreePointsCircleGraphic());
         }
         if (p.getBooleanProperty("weasis.draw.polygon", true)) { //$NON-NLS-1$
-            drawGraphicList.add(new PolygonGraphic());
+            drawGraphicList.add(new PolygonGraphic() {
+                @Override
+                public int getKeyCode() {
+                    return 0;
+                }
+            });
         }
+        drawGraphicList.forEach(g -> {
+            g.setLayerType(LayerType.DRAW);
+            g.setLabelVisible(false);
+        });
+
         if (p.getBooleanProperty("weasis.draw.textGrahic", true)) { //$NON-NLS-1$
             Graphic graphic = new AnnotationGraphic();
             graphic.setLayerType(LayerType.ANNOTATION);
             drawGraphicList.add(graphic);
         }
-        drawGraphicList.forEach(g -> g.setLabelVisible(false));
-        drawGraphicList.stream().filter(g -> Objects.isNull(g.getLayerType()))
-            .forEach(g -> g.setLayerType(LayerType.DRAW));
+        selectionGraphic.setLayerType(LayerType.TEMP_DRAW);
     }
 
     protected final JButton jButtondelete = new JButton();
     protected final JButton jButtonText = new JButton();
     protected final Component measureButtonGap = Box.createRigidArea(new Dimension(10, 0));
-    protected final ImageViewerEventManager<E> eventManager;
+    protected final ImageViewerEventManager<?> eventManager;
 
-    public MeasureToolBar(final ImageViewerEventManager<E> eventManager, int index) {
+    @SuppressWarnings("rawtypes")
+    public MeasureToolBar(final ImageViewerEventManager<?> eventManager, int index) {
         super(Messages.getString("MeasureToolBar.title"), index); //$NON-NLS-1$
         if (eventManager == null) {
             throw new IllegalArgumentException("EventManager cannot be null"); //$NON-NLS-1$
         }
         this.eventManager = eventManager;
 
-        // Do not apply to textGrahic
-        for (int i = 1; i < measureGraphicList.size() - 1; i++) {
-            applyDefaultSetting(MeasureTool.viewSetting, measureGraphicList.get(i));
-        }
+        MeasureToolBar.measureGraphicList.forEach(g -> MeasureToolBar.applyDefaultSetting(MeasureTool.viewSetting, g));
+        MeasureToolBar.drawGraphicList.forEach(g -> MeasureToolBar.applyDefaultSetting(MeasureTool.viewSetting, g));
 
         Optional<ComboItemListener> measure = eventManager.getAction(ActionW.DRAW_MEASURE, ComboItemListener.class);
         Optional<ComboItemListener> draw = eventManager.getAction(ActionW.DRAW_GRAPHICS, ComboItemListener.class);
@@ -204,7 +212,7 @@ public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
         }
     }
 
-    private DropDownButton buildButton(ComboItemListener action) {
+    private DropDownButton buildButton(ComboItemListener<?> action) {
         boolean draw = action.getActionW() == ActionW.DRAW_GRAPHICS;
 
         MeasureGroupMenu menu = new MeasureGroupMenu(action.getActionW());
@@ -232,11 +240,12 @@ public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
         menu.setButton(dropDownButton);
         action.registerActionState(dropDownButton);
 
-        dropDownButton.setToolTipText(draw ? "Drawing Tools" : Messages.getString("MeasureToolBar.tools")); //$NON-NLS-2$
+        dropDownButton.setToolTipText(
+            draw ? Messages.getString("MeasureToolBar.drawing_tools") : Messages.getString("MeasureToolBar.tools")); //$NON-NLS-1$//$NON-NLS-2$
 
         // when user press the measure icon, set the action to measure
         dropDownButton.addActionListener(e -> {
-            ImageViewerPlugin<E> view = eventManager.getSelectedView2dContainer();
+            ImageViewerPlugin<?> view = eventManager.getSelectedView2dContainer();
             if (view != null) {
                 @SuppressWarnings("rawtypes")
                 final ViewerToolBar toolBar = view.getViewerToolBar();
@@ -280,9 +289,9 @@ public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
                             smallIcon = graphic.getIcon();
                         }
                         if (smallIcon != null) {
-                            x += bckIcon.getIconWidth() - smallIcon.getIconWidth() - 1;
-                            y += bckIcon.getIconHeight() - smallIcon.getIconHeight() - 1;
-                            smallIcon.paintIcon(c, g, x, y);
+                            int offsetx = bckIcon.getIconWidth() - smallIcon.getIconWidth() - 1;
+                            int offsety = bckIcon.getIconHeight() - smallIcon.getIconHeight() - 1;
+                            smallIcon.paintIcon(c, g, x + offsetx, y + offsety);
                         }
                     }
                 }
@@ -300,19 +309,13 @@ public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
         });
     }
 
-    public static Graphic getGraphic(String action) {
-        return Optional.ofNullable(action).flatMap(firstSameAction(measureGraphicList)).orElse(null);
-    }
-
-    private static Function<String, Optional<Graphic>> firstSameAction(List<Graphic> list) {
-        return action -> list.stream().filter(graphic -> Objects.equals(action, graphic.toString())).findFirst();
-    }
-
-    static class MeasureGroupMenu extends GroupRadioMenu {
-        private ActionW actionW;
+    static class MeasureGroupMenu extends GroupRadioMenu<Graphic> {
+        private ActionW action;
         private JButton button;
-        public MeasureGroupMenu(ActionW actionW) {
+
+        public MeasureGroupMenu(ActionW action) {
             super();
+            this.action = action;
         }
 
         @Override
@@ -324,7 +327,7 @@ public class MeasureToolBar<E extends ImageElement> extends WtoolBar {
         public void changeButtonState() {
             Object sel = dataModel.getSelectedItem();
             if (sel instanceof Graphic && button != null) {
-                Icon icon = buildIcon((Graphic) sel,  actionW == ActionW.DRAW ? drawIcon : MeasureIcon);
+                Icon icon = buildIcon((Graphic) sel, action == ActionW.DRAW_GRAPHICS ? drawIcon : MeasureIcon);
                 button.setIcon(icon);
                 button.setActionCommand(sel.toString());
             }

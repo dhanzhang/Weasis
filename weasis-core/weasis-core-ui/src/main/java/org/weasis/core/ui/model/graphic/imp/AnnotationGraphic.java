@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic.imp;
 
 import java.awt.Color;
@@ -14,6 +24,7 @@ import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 import javax.swing.Icon;
@@ -32,12 +43,13 @@ import org.weasis.core.api.util.StringUtil;
 import org.weasis.core.ui.Messages;
 import org.weasis.core.ui.editor.image.ViewCanvas;
 import org.weasis.core.ui.model.graphic.AbstractDragGraphic;
+import org.weasis.core.ui.model.graphic.AbstractGraphicLabel;
 import org.weasis.core.ui.model.graphic.Graphic;
+import org.weasis.core.ui.model.graphic.GraphicLabel;
 import org.weasis.core.ui.model.utils.bean.AdvancedShape;
 import org.weasis.core.ui.model.utils.bean.AdvancedShape.BasicShape;
 import org.weasis.core.ui.model.utils.bean.AdvancedShape.ScaleInvariantShape;
 import org.weasis.core.ui.model.utils.exceptions.InvalidShapeException;
-import org.weasis.core.ui.model.utils.imp.DefaultGraphicLabel;
 import org.weasis.core.ui.serialize.RectangleAdapter;
 import org.weasis.core.ui.util.MouseEventDouble;
 
@@ -71,11 +83,10 @@ public class AnnotationGraphic extends AbstractDragGraphic {
         super.initCopy(graphic);
         if (graphic instanceof AnnotationGraphic) {
             AnnotationGraphic annotationGraphic = (AnnotationGraphic) graphic;
+            labels = Optional.ofNullable(annotationGraphic.labels).map(l -> l.clone()).orElse(null);
             labelBounds = Optional.ofNullable(annotationGraphic.labelBounds).map(lb -> lb.getBounds2D()).orElse(null);
             labelWidth = annotationGraphic.labelWidth;
             labelHeight = annotationGraphic.labelHeight;
-            if (annotationGraphic.labels != null)
-                labels = annotationGraphic.labels.clone();
         }
     }
 
@@ -89,18 +100,15 @@ public class AnnotationGraphic extends AbstractDragGraphic {
         if (!isShapeValid()) {
             throw new InvalidShapeException("This shape cannot be drawn"); //$NON-NLS-1$
         }
-       // Do not build shape as labelBounds can be initialize only by the method setLabel()
+        // Do not build shape as labelBounds can be initialize only by the method setLabel()
     }
 
     protected void setHandlePointList(Point2D.Double ptAnchor, Point2D.Double ptBox) {
-        if (ptBox == null && ptAnchor != null) {
-            ptBox = ptAnchor;
-        }
-        if (ptBox != null && ptBox.equals(ptAnchor)) {
-            ptAnchor = null;
-        }
-        setHandlePoint(0, ptAnchor == null ? null : (Point2D.Double) ptAnchor.clone());
-        setHandlePoint(1, ptBox == null ? null : (Point2D.Double) ptBox.clone());
+        Point2D.Double pt2 = (ptBox == null && ptAnchor != null) ? ptAnchor : ptBox;
+        Point2D.Double pt1 = (pt2 != null && pt2.equals(ptAnchor)) ? null : ptAnchor;
+
+        setHandlePoint(0, pt1 == null ? null : (Point2D.Double) pt1.clone());
+        setHandlePoint(1, pt2 == null ? null : (Point2D.Double) pt2.clone());
         buildShape(null);
     }
 
@@ -153,7 +161,7 @@ public class AnnotationGraphic extends AbstractDragGraphic {
     }
 
     @Override
-    public void updateLabel(Object source, ViewCanvas<?> view2d, Point2D pos) {
+    public void updateLabel(ViewCanvas<?> view2d, Point2D pos, boolean releasedEvent) {
         setLabel(labels, view2d, pos);
     }
 
@@ -188,9 +196,9 @@ public class AnnotationGraphic extends AbstractDragGraphic {
             }
             labelBounds = new Rectangle.Double();
             labelBounds.setFrameFromCenter(ptBox.getX(), ptBox.getY(),
-                ptBox.getX() + labelWidth / 2 + DefaultGraphicLabel.GROWING_BOUND,
-                ptBox.getY() + labelHeight * labels.length / 2 + DefaultGraphicLabel.GROWING_BOUND);
-            GeomUtil.growRectangle(labelBounds, DefaultGraphicLabel.GROWING_BOUND);
+                ptBox.getX() + labelWidth / 2.0 + GraphicLabel.GROWING_BOUND,
+                ptBox.getY() + labelHeight * (labels == null ? 1 : labels.length) / 2.0 + GraphicLabel.GROWING_BOUND);
+            GeomUtil.growRectangle(labelBounds, GraphicLabel.GROWING_BOUND);
             if (line != null) {
                 newShape.addLinkSegmentToInvariantShape(line, ptBox, labelBounds, getDashStroke(lineThickness), false);
 
@@ -237,13 +245,13 @@ public class AnnotationGraphic extends AbstractDragGraphic {
                 transform.transform(pt, pt);
             }
 
-            float px = (float) (pt.getX() - rect.getWidth() / 2 + DefaultGraphicLabel.GROWING_BOUND);
-            float py = (float) (pt.getY() - rect.getHeight() / 2 + DefaultGraphicLabel.GROWING_BOUND);
+            float px = (float) (pt.getX() - rect.getWidth() / 2 + GraphicLabel.GROWING_BOUND);
+            float py = (float) (pt.getY() - rect.getHeight() / 2 + GraphicLabel.GROWING_BOUND);
 
             for (String label : labels) {
                 if (StringUtil.hasText(label)) {
                     py += labelHeight;
-                    DefaultGraphicLabel.paintColorFontOutline(g2d, label, px, py, Color.WHITE);
+                    AbstractGraphicLabel.paintColorFontOutline(g2d, label, px, py, Color.WHITE);
                 }
             }
             g2d.setPaint(oldPaint);
@@ -303,32 +311,25 @@ public class AnnotationGraphic extends AbstractDragGraphic {
         if (view2d == null || labels == null || labels.length == 0 || pos == null) {
             reset();
         } else {
-            Graphics2D g2d = (Graphics2D) view2d.getJComponent().getGraphics();
-            if (g2d == null) {
-                return;
-            }
             this.labels = labels;
-            Font defaultFont = g2d.getFont();
+            Font defaultFont = view2d.getFont();
+            Graphics2D g2d = (Graphics2D) view2d.getJComponent().getGraphics();
             FontRenderContext fontRenderContext =
-                ((Graphics2D) view2d.getJComponent().getGraphics()).getFontRenderContext();
-
+                g2d == null ? new FontRenderContext(null, false, false) : g2d.getFontRenderContext();
             updateBoundsSize(defaultFont, fontRenderContext);
 
             labelBounds = new Rectangle.Double();
-            labelBounds.setFrameFromCenter(pos.getX(), pos.getY(), (labelWidth + DefaultGraphicLabel.GROWING_BOUND) / 2,
-                ((labelHeight * labels.length) + DefaultGraphicLabel.GROWING_BOUND) * 2);
             labelBounds.setFrameFromCenter(pos.getX(), pos.getY(),
-                ptBox.getX() + labelWidth / 2 + DefaultGraphicLabel.GROWING_BOUND,
-                ptBox.getY() + labelHeight * this.labels.length / 2 + DefaultGraphicLabel.GROWING_BOUND);
-            GeomUtil.growRectangle(labelBounds, DefaultGraphicLabel.GROWING_BOUND);
+                ptBox.getX() + labelWidth / 2.0 + GraphicLabel.GROWING_BOUND,
+                ptBox.getY() + labelHeight * this.labels.length / 2.0 + GraphicLabel.GROWING_BOUND);
+            GeomUtil.growRectangle(labelBounds, GraphicLabel.GROWING_BOUND);
         }
         buildShape(null);
     }
 
     protected void updateBoundsSize(Font defaultFont, FontRenderContext fontRenderContext) {
-        Optional.ofNullable(defaultFont).orElseThrow(() -> new RuntimeException("Font should not be null"));
-        Optional.ofNullable(fontRenderContext)
-            .orElseThrow(() -> new RuntimeException("FontRenderContext should not be null"));
+        Objects.requireNonNull(defaultFont);
+        Objects.requireNonNull(fontRenderContext);
 
         if (labels == null || labels.length == 0) {
             reset();

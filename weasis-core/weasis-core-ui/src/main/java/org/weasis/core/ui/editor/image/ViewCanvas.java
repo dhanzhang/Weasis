@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.editor.image;
 
 import java.awt.Color;
@@ -26,7 +36,7 @@ import org.weasis.core.ui.model.utils.bean.PanPoint;
 public interface ViewCanvas<E extends ImageElement>
     extends Canvas, Image2DViewer<E>, PropertyChangeListener, FocusListener, ImageLayerChangeListener<E>, KeyListener {
 
-    public static final String zoomTypeCmd = "zoom.type"; //$NON-NLS-1$
+    public static final String ZOOM_TYPE_CMD = "zoom.type"; //$NON-NLS-1$
     public static final ImageIcon SYNCH_ICON = new ImageIcon(DefaultView2d.class.getResource("/icon/22x22/synch.png")); //$NON-NLS-1$
     public static final int CENTER_POINTER = 1 << 1;
     public static final int HIGHLIGHTED_POINTER = 1 << 2;
@@ -60,9 +70,21 @@ public interface ViewCanvas<E extends ImageElement>
 
     void setTileOffset(int tileOffset);
 
+    /**
+     * Center the image into the view.
+     * 
+     */
     void center();
 
-    void setCenter(Double x, Double y);
+    /**
+     * Set the offset from the center of the view. (0,0) will center the image into the view.
+     * 
+     * @param modelOffsetX
+     *            the X-offset
+     * @param modelOffsetY
+     *            the Y-offset
+     */
+    void setCenter(Double modelOffsetX, Double modelOffsetY);
 
     void moveOrigin(PanPoint point);
 
@@ -119,5 +141,7 @@ public interface ViewCanvas<E extends ImageElement>
     void closeLens();
 
     void updateCanvas(boolean triggerViewModelChangeListeners);
+
+    void updateGraphicSelectionListener(ImageViewerPlugin<E> viewerPlugin);
 
 }

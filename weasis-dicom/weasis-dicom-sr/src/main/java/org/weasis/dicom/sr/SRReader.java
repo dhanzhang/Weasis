@@ -1,5 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.sr;
 
+import java.awt.Color;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAccessor;
 import java.util.Map;
@@ -14,10 +25,13 @@ import org.weasis.core.api.media.data.TagUtil;
 import org.weasis.core.api.media.data.TagW;
 import org.weasis.core.api.util.EscapeChars;
 import org.weasis.core.api.util.StringUtil;
+import org.weasis.core.ui.model.graphic.Graphic;
+import org.weasis.core.ui.model.utils.exceptions.InvalidShapeException;
 import org.weasis.dicom.codec.DicomSpecialElement;
 import org.weasis.dicom.codec.TagD;
 import org.weasis.dicom.codec.macro.SOPInstanceReference;
 import org.weasis.dicom.codec.macro.SeriesAndInstanceReference;
+import org.weasis.dicom.explorer.pr.PrGraphicUtil;
 
 public class SRReader {
 
@@ -142,8 +156,8 @@ public class SRReader {
         }
     }
 
-    private void convertContentToHTML(StringBuilder html, SRDocumentContent c, boolean continuous, boolean noCodeName,
-        Map<String, SRImageReference> map, String level) {
+    private static void convertContentToHTML(StringBuilder html, SRDocumentContent c, boolean continuous,
+        boolean noCodeName, Map<String, SRImageReference> map, String level) {
         if (c != null) {
             html.append("<A name=\""); //$NON-NLS-1$
             html.append(level);
@@ -158,7 +172,7 @@ public class SRReader {
                 addCodeMeaning(html, c.getConceptCode(), null, null);
             } else if ("PNAME".equals(type)) { //$NON-NLS-1$
                 html.append(continuous || noCodeName ? " " : StringUtil.COLON_AND_SPACE); //$NON-NLS-1$
-                convertTextToHTML(html, TagUtil.buildDicomPersonName(c.getPersonName()));
+                convertTextToHTML(html, TagD.getDicomPersonName(c.getPersonName()));
             } else if ("NUM".equals(type)) { //$NON-NLS-1$
                 html.append(continuous || noCodeName ? " " : " = "); //$NON-NLS-1$ //$NON-NLS-2$
                 Attributes val = c.getMeasuredValue();
@@ -175,32 +189,13 @@ public class SRReader {
                 return;
             } else if ("IMAGE".equals(type)) { //$NON-NLS-1$
                 html.append(continuous || noCodeName ? " " : StringUtil.COLON_AND_SPACE); //$NON-NLS-1$
-                Attributes item = c.getAttributes().getNestedDataset(Tag.ReferencedSOPSequence);
-                if (item != null) {
-                    SRImageReference imgRef = map.get(level);
-                    if (imgRef == null) {
-                        imgRef = new SRImageReference(level);
-                        map.put(level, imgRef);
-                    }
-                    if (imgRef.getSopInstanceReference() == null) {
-                        imgRef.setSopInstanceReference(new SOPInstanceReference(item));
-                    }
-
-                    // int[] frames = ref.getReferencedFrameNumber();
-                    // if (frames == null || frames.length == 0) {
-                    // html.append("<img align=\"top\"
-                    // src=\"http://localhost:8080/wado?requestType=WADO&studyUID=1&seriesUID=1&objectUID=");
-                    // html.append(ref.getReferencedSOPInstanceUID());
-                    // html.append("\">");
-                    // html.append("<BR>");
-                    // }
-
+                SRImageReference imgRef = getReferencedImage(map, level, c.getAttributes());
+                if (imgRef != null) {
                     html.append("<a href=\"http://"); //$NON-NLS-1$
                     html.append(level);
                     html.append("\" style=\"color:#FF9900\">"); //$NON-NLS-1$
                     html.append(Messages.getString("SRReader.show_img")); //$NON-NLS-1$
                     html.append("</a>"); //$NON-NLS-1$
-
                 }
             } else if ("DATETIME".equals(type)) { //$NON-NLS-1$
                 html.append(continuous || noCodeName ? " " : StringUtil.COLON_AND_SPACE); //$NON-NLS-1$
@@ -230,35 +225,45 @@ public class SRReader {
                 }
             } else if ("SCOORD".equals(type)) { //$NON-NLS-1$
                 Attributes graphicsItems = c.getAttributes();
-                // TODO register a SR layer on referenced image
-                // Sequence sc = c.getContent();
-                // if (sc != null) {
-                // for (Attributes attributes : sc) {
-                // SRDocumentContent c2 = new SRDocumentContent(attributes);
-                // String id = getReferencedContentItemIdentifier(c2.getReferencedContentItemIdentifier());
-                // if (id != null) {
-                // SRImageReference imgRef = map.get(id);
-                // if (imgRef == null) {
-                // imgRef = new SRImageReference(id);
-                // map.put(id, imgRef);
-                // }
-                // // Identifier layerId = new Identifier(350, " [DICOM SR Graphics]");
-                // // DefaultLayer layer = new DefaultLayer(view.getLayerModel(), layerId);$
-                // try {
-                // Graphic graphic =
-                // PrGraphicUtil.buildGraphicFromPR(graphicsItems, Color.MAGENTA, false, 1, 1, false,
-                // null, true);
-                // if (graphic != null) {
-                // imgRef.addGraphic(graphic);
-                // }
-                // } catch (InvalidShapeException e) {
-                // e.printStackTrace();
-                // }
-                // }
-                // }
-                // }
-                html.append(continuous || noCodeName ? " " : StringUtil.COLON_AND_SPACE); //$NON-NLS-1$
-                convertTextToHTML(html, graphicsItems.getString(Tag.GraphicType));
+                Sequence sc = c.getContent();
+                if (sc != null) {
+                    for (Attributes attributes : sc) {
+                        SRDocumentContent c2 = new SRDocumentContent(attributes);
+                        String id = getReferencedContentItemIdentifier(c2.getReferencedContentItemIdentifier());
+                        SRImageReference imgRef = null;
+                        if (id == null) {
+                            imgRef = getReferencedImage(map, level, attributes);
+                            id = level;
+                        } else {
+                            imgRef = map.get(id);
+                            if (imgRef == null) {
+                                imgRef = new SRImageReference(id);
+                                map.put(id, imgRef);
+                            }
+                        }
+
+                        if (imgRef != null) {
+                            try {
+                                Graphic graphic = PrGraphicUtil.buildGraphic(graphicsItems, Color.MAGENTA, false, 1, 1,
+                                    false, null, true);
+                                if (graphic != null) {
+                                    imgRef.addGraphic(graphic);
+                                }
+                            } catch (InvalidShapeException e) {
+                                e.printStackTrace();
+                            }
+
+                            html.append(continuous || noCodeName ? " " : StringUtil.COLON_AND_SPACE); //$NON-NLS-1$
+
+                            html.append("<a href=\"http://"); //$NON-NLS-1$
+                            html.append(id);
+                            html.append("\" style=\"color:#FF9900\">"); //$NON-NLS-1$
+                            html.append(graphicsItems.getString(Tag.GraphicType));
+                            html.append("</a>"); //$NON-NLS-1$
+                        }
+                    }
+                }
+
                 // } else if ("TCOORD".equals(type)) {
                 // html.append(continuous || noCodeName ? " " : StringUtil.COLON_AND_SPACE);
                 // // TODO
@@ -291,7 +296,20 @@ public class SRReader {
         }
     }
 
-    private String getReferencedContentItemIdentifier(int[] refs) {
+    private static SRImageReference getReferencedImage(Map<String, SRImageReference> map, String level,
+        Attributes attributes) {
+        Attributes item = attributes.getNestedDataset(Tag.ReferencedSOPSequence);
+        if (item == null) {
+            return null;
+        }
+        SRImageReference imgRef = map.computeIfAbsent(level, k ->  new SRImageReference(level));
+        if (imgRef.getSopInstanceReference() == null) {
+            imgRef.setSopInstanceReference(new SOPInstanceReference(item));
+        }
+        return imgRef;
+    }
+
+    private static String getReferencedContentItemIdentifier(int[] refs) {
         if (refs != null) {
             StringBuilder r = new StringBuilder();
             for (int j = 0; j < refs.length - 1; j++) {
@@ -306,7 +324,8 @@ public class SRReader {
         return null;
     }
 
-    private void addContent(StringBuilder html, SRDocumentContent c, Map<String, SRImageReference> map, String level) {
+    private static void addContent(StringBuilder html, SRDocumentContent c, Map<String, SRImageReference> map,
+        String level) {
         Sequence cts = c.getContent();
         if (cts != null) {
             boolean continuity = "CONTINUOUS".equals(c.getContinuityOfContent()); //$NON-NLS-1$
@@ -332,7 +351,7 @@ public class SRReader {
         }
     }
 
-    private void addCodeMeaning(StringBuilder html, Code code, String startTag, String endTag) {
+    private static void addCodeMeaning(StringBuilder html, Code code, String startTag, String endTag) {
         if (code != null) {
             if (startTag != null) {
                 html.append(startTag);
@@ -344,7 +363,7 @@ public class SRReader {
         }
     }
 
-    private void convertTextToHTML(StringBuilder html, String text) {
+    private static void convertTextToHTML(StringBuilder html, String text) {
         if (text != null) {
             String[] lines = EscapeChars.convertToLines(text);
             if (lines.length > 0) {
@@ -364,7 +383,7 @@ public class SRReader {
             html.append(tag.getDisplayedName());
             html.append("</B>"); //$NON-NLS-1$
             html.append(StringUtil.COLON_AND_SPACE);
-            html.append(tag.getFormattedText(tag.getValue(dcmItems), null));
+            html.append(tag.getFormattedTagValue(tag.getValue(dcmItems), null));
         }
     }
 
@@ -392,12 +411,12 @@ public class SRReader {
                 html.append(StringUtil.COLON);
                 html.append("<BR>"); //$NON-NLS-1$
                 for (Attributes v : seq) {
-                    TemporalAccessor date =  (TemporalAccessor) TagD.get(Tag.VerificationDateTime).getValue(v);
+                    TemporalAccessor date = (TemporalAccessor) TagD.get(Tag.VerificationDateTime).getValue(v);
                     if (date != null) {
                         html.append(" * "); //$NON-NLS-1$
                         html.append(TagUtil.formatDateTime(date));
                         html.append(" - "); //$NON-NLS-1$
-                        String name = TagUtil.buildDicomPersonName(v.getString(Tag.VerifyingObserverName));
+                        String name = TagD.getDicomPersonName(v.getString(Tag.VerifyingObserverName));
                         if (name != null) {
                             html.append(name);
                             html.append(", "); //$NON-NLS-1$

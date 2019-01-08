@@ -1,23 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.sr;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.beans.PropertyChangeListener;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,14 +29,13 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
 import javax.swing.border.EmptyBorder;
 import javax.swing.event.HyperlinkEvent;
-import javax.swing.event.HyperlinkListener;
-import javax.swing.text.html.HTMLEditorKit;
-import javax.swing.text.html.StyleSheet;
 
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Tag;
 import org.weasis.core.api.explorer.DataExplorerView;
 import org.weasis.core.api.explorer.ObservableEvent;
+import org.weasis.core.api.gui.util.JMVUtils;
+import org.weasis.core.api.media.data.ImageElement;
 import org.weasis.core.api.media.data.MediaElement;
 import org.weasis.core.api.media.data.MediaSeries;
 import org.weasis.core.api.media.data.MediaSeriesGroup;
@@ -50,6 +48,13 @@ import org.weasis.core.ui.editor.SeriesViewerFactory;
 import org.weasis.core.ui.editor.SeriesViewerListener;
 import org.weasis.core.ui.editor.ViewerPluginBuilder;
 import org.weasis.core.ui.editor.image.ViewerPlugin;
+import org.weasis.core.ui.model.GraphicModel;
+import org.weasis.core.ui.model.graphic.Graphic;
+import org.weasis.core.ui.model.imp.XmlGraphicModel;
+import org.weasis.core.ui.model.layer.GraphicLayer;
+import org.weasis.core.ui.model.layer.LayerType;
+import org.weasis.core.ui.model.layer.imp.DefaultLayer;
+import org.weasis.dicom.codec.AbstractKOSpecialElement.Reference;
 import org.weasis.dicom.codec.DcmMediaReader;
 import org.weasis.dicom.codec.DicomImageElement;
 import org.weasis.dicom.codec.DicomMediaIO;
@@ -68,7 +73,7 @@ import org.weasis.dicom.explorer.MimeSystemAppFactory;
 public class SRView extends JScrollPane implements SeriesViewerListener {
 
     private final JTextPane htmlPanel = new JTextPane();
-    private final Map<String, SRImageReference> map = new HashMap<String, SRImageReference>();
+    private final Map<String, SRImageReference> map = new HashMap<>();
     private Series<?> series;
     private KOSpecialElement keyReferences;
 
@@ -81,34 +86,25 @@ public class SRView extends JScrollPane implements SeriesViewerListener {
         panel.setLayout(new BorderLayout());
         panel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         htmlPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+        htmlPanel.setEditorKit(JMVUtils.buildHTMLEditorKit(htmlPanel));
         htmlPanel.setContentType("text/html"); //$NON-NLS-1$
         htmlPanel.setEditable(false);
-        htmlPanel.addHyperlinkListener(new HyperlinkListener() {
-            @Override
-            public void hyperlinkUpdate(HyperlinkEvent e) {
-                JTextPane pane = (JTextPane) e.getSource();
-                if (e.getEventType() == HyperlinkEvent.EventType.ENTERED) {
-                    pane.setToolTipText(e.getDescription());
-                } else if (e.getEventType() == HyperlinkEvent.EventType.EXITED) {
-                    pane.setToolTipText(null);
-                } else if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-                    String desc = e.getDescription();
-                    URL url = e.getURL();
-                    if (url == null && desc != null && desc.startsWith("#")) { //$NON-NLS-1$
-                        htmlPanel.scrollToReference(desc.substring(1));
-                    } else {
-                        openRelatedSeries(e.getURL().getHost());
-                    }
+        htmlPanel.addHyperlinkListener(e -> {
+            JTextPane pane = (JTextPane) e.getSource();
+            if (e.getEventType() == HyperlinkEvent.EventType.ENTERED) {
+                pane.setToolTipText(e.getDescription());
+            } else if (e.getEventType() == HyperlinkEvent.EventType.EXITED) {
+                pane.setToolTipText(null);
+            } else if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+                String desc = e.getDescription();
+                URL url = e.getURL();
+                if (url == null && desc != null && desc.startsWith("#")) { //$NON-NLS-1$
+                    htmlPanel.scrollToReference(desc.substring(1));
+                } else {
+                    openRelatedSeries(e.getURL().getHost());
                 }
             }
         });
-        HTMLEditorKit kit = new HTMLEditorKit();
-        StyleSheet ss = kit.getStyleSheet();
-        ss.addRule("body {font-family:sans-serif;font-size:12pt;background-color:#" //$NON-NLS-1$
-            + Integer.toHexString((htmlPanel.getBackground().getRGB() & 0xffffff) | 0x1000000).substring(1) + ";color:#" //$NON-NLS-1$
-            + Integer.toHexString((htmlPanel.getForeground().getRGB() & 0xffffff) | 0x1000000).substring(1)
-            + ";margin:3;font-weight:normal;}"); //$NON-NLS-1$
-        htmlPanel.setEditorKit(kit);
         setPreferredSize(new Dimension(1024, 1024));
         setSeries(series);
     }
@@ -218,13 +214,14 @@ public class SRView extends JScrollPane implements SeriesViewerListener {
                         }
 
                         if (keyReferences != null) {
-                            // TODO Handle multiframe and select the current frame or SOPInstanceUID
-                            // int[] frames = ref.getReferencedFrameNumber();
-                            keyReferences.addKeyObject(TagD.getTagValue(s, Tag.StudyInstanceUID, String.class),
+                            Reference koRef = new Reference(TagD.getTagValue(s, Tag.StudyInstanceUID, String.class),
                                 TagD.getTagValue(s, Tag.SeriesInstanceUID, String.class),
-                                ref.getReferencedSOPInstanceUID(), ref.getReferencedSOPClassUID());
+                                ref.getReferencedSOPInstanceUID(), ref.getReferencedSOPClassUID(),
+                                ref.getReferencedFrameNumber());
+                            keyReferences.addKeyObject(koRef);
                             SeriesViewerFactory plugin = UIManager.getViewerFactory(DicomMediaIO.SERIES_MIMETYPE);
                             if (plugin != null && !(plugin instanceof MimeSystemAppFactory)) {
+                                addGraphicstoView(s.getMedia(0, null, null), imgRef);
                                 String uid = UUID.randomUUID().toString();
                                 Map<String, Object> props = Collections.synchronizedMap(new HashMap<String, Object>());
                                 props.put(ViewerPluginBuilder.CMP_ENTRY_BUILD_NEW_VIEWER, false);
@@ -232,13 +229,12 @@ public class SRView extends JScrollPane implements SeriesViewerListener {
                                 props.put(ViewerPluginBuilder.ICON,
                                     new ImageIcon(model.getClass().getResource("/icon/16x16/key-images.png"))); //$NON-NLS-1$
                                 props.put(ViewerPluginBuilder.UID, uid);
-                                List<MediaSeries<? extends MediaElement<?>>> seriesList =
-                                    new ArrayList<MediaSeries<? extends MediaElement<?>>>();
-                                seriesList.add(s);
+                                List<DicomSeries> seriesList = new ArrayList<>();
+                                seriesList.add((DicomSeries) s);
                                 ViewerPluginBuilder builder = new ViewerPluginBuilder(plugin, seriesList, model, props);
                                 ViewerPluginBuilder.openSequenceInPlugin(builder);
                                 model.firePropertyChange(
-                                    new ObservableEvent(ObservableEvent.BasicAction.Select, uid, null, keyReferences));
+                                    new ObservableEvent(ObservableEvent.BasicAction.SELECT, uid, null, keyReferences));
                             }
                         }
                     } else {
@@ -253,26 +249,85 @@ public class SRView extends JScrollPane implements SeriesViewerListener {
         }
     }
 
-    private Series<?> findSOPInstanceReference(DicomModel model, MediaSeriesGroup patient, MediaSeriesGroup study,
-        String sopUID) {
-        if (model != null && patient != null && sopUID != null) {
-            Series<?> series = null;
-            if (study != null) {
-                series = findSOPInstanceReference(model, study, sopUID);
-                if (series != null) {
-                    return series;
+    private void addGraphicstoView(MediaElement mediaElement, SRImageReference imgRef) {
+        if (mediaElement instanceof ImageElement && imgRef.getGraphics() != null && !imgRef.getGraphics().isEmpty()) {
+
+            GraphicModel modelList = (GraphicModel) mediaElement.getTagValue(TagW.PresentationModel);
+            // After getting a new image iterator, update the measurements
+            if (modelList == null) {
+                modelList = new XmlGraphicModel((ImageElement) mediaElement);
+                mediaElement.setTag(TagW.PresentationModel, modelList);
+            }
+
+            String layerName = "SCOORD [DICOM]";//$NON-NLS-1$
+            GraphicLayer layer = null;
+            for (GraphicLayer l : modelList.getLayers()) {
+                if (layerName.equals(l.getName())) {
+                    layer = l;
+                    break;
                 }
             }
 
-            Collection<MediaSeriesGroup> studyList = model.getChildren(patient);
-            synchronized (model) {
-                for (Iterator<MediaSeriesGroup> it = studyList.iterator(); it.hasNext();) {
-                    MediaSeriesGroup st = it.next();
-                    if (st != study) {
-                        series = findSOPInstanceReference(model, st, sopUID);
+            boolean addLayer = layer == null;
+
+            if (addLayer) {
+                layer = new DefaultLayer(LayerType.DICOM_SR);
+                layer.setName(layerName);
+                layer.setSerializable(false);
+                layer.setLocked(true);
+                layer.setSelectable(false);
+                layer.setLevel(305);
+            }
+
+            if (!addLayer) {
+                List<Graphic> models = modelList.getModels();
+                int size = 0;
+                synchronized (models) {
+                    for (Graphic g : models) {
+                        boolean sr = layer.equals(g.getLayer());
+                        if (sr) {
+                            size++;
+                        }
                     }
-                    if (series != null) {
-                        return series;
+                }
+
+                if (imgRef.getGraphics().size() == size) {
+                    return;
+                }
+
+                if (size > 0) {
+                    modelList.deleteByLayer(layer);
+                }
+            }
+
+            for (Graphic graphic : imgRef.getGraphics()) {
+                graphic.setLayer(layer);
+                for (PropertyChangeListener listener : modelList.getGraphicsListeners()) {
+                    graphic.addPropertyChangeListener(listener);
+                }
+                modelList.addGraphic(graphic);
+            }
+        }
+    }
+
+    private static Series<?> findSOPInstanceReference(DicomModel model, MediaSeriesGroup patient,
+        MediaSeriesGroup study, String sopUID) {
+        if (model != null && patient != null && sopUID != null) {
+            Series<?> s = null;
+            if (study != null) {
+                s = findSOPInstanceReference(model, study, sopUID);
+                if (s != null) {
+                    return s;
+                }
+            }
+
+            synchronized (model) {
+                for (MediaSeriesGroup st : model.getChildren(patient)) {
+                    if (st != study) {
+                        s = findSOPInstanceReference(model, st, sopUID);
+                    }
+                    if (s != null) {
+                        return s;
                     }
                 }
             }
@@ -300,13 +355,11 @@ public class SRView extends JScrollPane implements SeriesViewerListener {
         return null;
     }
 
-    private Series<?> findSOPInstanceReference(DicomModel model, MediaSeriesGroup study, String sopUID) {
+    private static Series<?> findSOPInstanceReference(DicomModel model, MediaSeriesGroup study, String sopUID) {
         if (model != null && study != null) {
             TagW sopTag = TagD.getUID(Level.INSTANCE);
-            Collection<MediaSeriesGroup> seriesList = model.getChildren(study);
             synchronized (model) {
-                for (Iterator<MediaSeriesGroup> it = seriesList.iterator(); it.hasNext();) {
-                    MediaSeriesGroup seq = it.next();
+                for (MediaSeriesGroup seq : model.getChildren(study)) {
                     if (seq instanceof Series) {
                         Series<?> s = (Series<?>) seq;
                         if (s.hasMediaContains(sopTag, sopUID)) {

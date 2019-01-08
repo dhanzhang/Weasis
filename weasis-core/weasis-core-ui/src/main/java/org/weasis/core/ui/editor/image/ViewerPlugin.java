@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 // Placed in public domain by Dmitry Olshansky, 2006
 package org.weasis.core.ui.editor.image;
 
@@ -47,7 +47,7 @@ import bibliothek.gui.dock.common.intern.DefaultCommonDockable;
 import bibliothek.gui.dock.common.mode.ExtendedMode;
 import bibliothek.gui.dock.control.focus.DefaultFocusRequest;
 
-public abstract class ViewerPlugin<E extends MediaElement<?>> extends JPanel implements SeriesViewer<E> {
+public abstract class ViewerPlugin<E extends MediaElement> extends JPanel implements SeriesViewer<E> {
 
     private final String dockableUID;
     private MediaSeriesGroup groupID;
@@ -56,8 +56,8 @@ public abstract class ViewerPlugin<E extends MediaElement<?>> extends JPanel imp
     private final String tooltips;
     private final DefaultSingleCDockable dockable;
 
-    public ViewerPlugin(String PluginName) {
-        this(null, PluginName, null, null);
+    public ViewerPlugin(String pluginName) {
+        this(null, pluginName, null, null);
     }
 
     public ViewerPlugin(String uid, String pluginName, Icon icon, String tooltips) {
@@ -84,16 +84,7 @@ public abstract class ViewerPlugin<E extends MediaElement<?>> extends JPanel imp
                 Dockable prevDockable = UIManager.DOCKING_CONTROL.getController().getFocusHistory()
                     .getNewestOn(dockable.getWorkingArea().getStation());
                 if (prevDockable == null) {
-                    int size = UIManager.VIEWER_PLUGINS.size();
-                    if (size > 0) {
-                        ViewerPlugin lp = UIManager.VIEWER_PLUGINS.get(size - 1);
-                        if (lp != null) {
-                            lp.dockable.toFront();
-                        }
-                    } else {
-                        ViewerPluginBuilder.DefaultDataModel.firePropertyChange(new ObservableEvent(
-                            ObservableEvent.BasicAction.NULL_SELECTION, ViewerPlugin.this, null, null));
-                    }
+                    handleFocusAfterClosing();
                 } else {
                     if (prevDockable instanceof DefaultCommonDockable) {
                         CDockable ld = ((DefaultCommonDockable) prevDockable).getDockable();
@@ -148,17 +139,25 @@ public abstract class ViewerPlugin<E extends MediaElement<?>> extends JPanel imp
             .setFocusedDockable(new DefaultFocusRequest(dockable.intern(), this, false, true, false));
     }
 
+    public void handleFocusAfterClosing() {
+        int size = UIManager.VIEWER_PLUGINS.size();
+        if (size > 0) {
+            ViewerPlugin<?> lp = UIManager.VIEWER_PLUGINS.get(size - 1);
+            if (lp != null) {
+                lp.dockable.toFront();
+            }
+        } else {
+            ViewerPluginBuilder.DefaultDataModel.firePropertyChange(
+                new ObservableEvent(ObservableEvent.BasicAction.NULL_SELECTION, ViewerPlugin.this, null, null));
+        }
+    }
+
     @Override
     public void close() {
-        GuiExecutor.instance().execute(new Runnable() {
-
-            @Override
-            public void run() {
-                UIManager.VIEWER_PLUGINS.remove(ViewerPlugin.this);
-                UIManager.DOCKING_CONTROL.removeDockable(dockable);
-            }
+        GuiExecutor.instance().execute(() -> {
+            UIManager.VIEWER_PLUGINS.remove(ViewerPlugin.this);
+            UIManager.DOCKING_CONTROL.removeDockable(dockable);
         });
-
     }
 
     public Component getComponent() {
@@ -170,21 +169,16 @@ public abstract class ViewerPlugin<E extends MediaElement<?>> extends JPanel imp
     }
 
     public void showDockable() {
-        GuiExecutor.instance().execute(new Runnable() {
-
-            @Override
-            public void run() {
-                if (!dockable.isVisible()) {
-                    if (!UIManager.VIEWER_PLUGINS.contains(ViewerPlugin.this)) {
-                        UIManager.VIEWER_PLUGINS.add(ViewerPlugin.this);
-                    }
-                    dockable.add(getComponent());
-                    dockable.setFocusComponent(ViewerPlugin.this);
-                    UIManager.MAIN_AREA.add(getDockable());
-                    dockable.setDefaultLocation(ExtendedMode.NORMALIZED,
-                        CLocation.working(UIManager.MAIN_AREA).stack());
-                    dockable.setVisible(true);
+        GuiExecutor.instance().execute(() -> {
+            if (!dockable.isVisible()) {
+                if (!UIManager.VIEWER_PLUGINS.contains(ViewerPlugin.this)) {
+                    UIManager.VIEWER_PLUGINS.add(ViewerPlugin.this);
                 }
+                dockable.add(getComponent());
+                dockable.setFocusComponent(ViewerPlugin.this);
+                UIManager.MAIN_AREA.add(getDockable());
+                dockable.setDefaultLocation(ExtendedMode.NORMALIZED, CLocation.working(UIManager.MAIN_AREA).stack());
+                dockable.setVisible(true);
             }
         });
     }
@@ -236,9 +230,12 @@ public abstract class ViewerPlugin<E extends MediaElement<?>> extends JPanel imp
                 // some checks before closing a Dockable
                 if (child instanceof CommonDockable) {
                     CDockable cChild = ((CommonDockable) child).getDockable();
-                    if (closeAll || cChild != dockable) {
+                    if (cChild.isCloseable() && (closeAll || cChild != dockable)) {
                         if (cChild.getFocusComponent() instanceof SeriesViewer) {
                             ((SeriesViewer) cChild.getFocusComponent()).close();
+                            if(cChild.getFocusComponent() instanceof ViewerPlugin) {
+                                ((ViewerPlugin) cChild.getFocusComponent()).handleFocusAfterClosing();
+                            }
                         } else {
                             cChild.setVisible(false);
                         }

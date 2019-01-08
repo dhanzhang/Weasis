@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.codec.display;
 
 import java.awt.event.KeyEvent;
@@ -20,9 +20,9 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 
-import javax.media.jai.LookupTableJAI;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -42,11 +42,11 @@ import org.weasis.core.api.util.StringUtil;
 import org.weasis.dicom.codec.DicomImageElement;
 import org.weasis.dicom.codec.Messages;
 import org.weasis.dicom.codec.TagD;
+import org.weasis.opencv.data.LookupTableCV;
 
 public class PresetWindowLevel {
     private static final Logger LOGGER = LoggerFactory.getLogger(PresetWindowLevel.class);
 
-    public static final String fullDynamicExplanation = Messages.getString("PresetWindowLevel.full"); //$NON-NLS-1$
     private static final Map<String, List<PresetWindowLevel>> presetListByModality = getPresetListByModality();
 
     private final String name;
@@ -56,13 +56,10 @@ public class PresetWindowLevel {
     private int keyCode = 0;
 
     public PresetWindowLevel(String name, Double window, Double level, LutShape shape) {
-        if (name == null || window == null || level == null || shape == null) {
-            throw new IllegalArgumentException();
-        }
-        this.name = name;
-        this.window = window;
-        this.level = level;
-        this.shape = shape;
+        this.name = Objects.requireNonNull(name);
+        this.window = Objects.requireNonNull(window);
+        this.level = Objects.requireNonNull(level);
+        this.shape = Objects.requireNonNull(shape);
     }
 
     public String getName() {
@@ -101,6 +98,10 @@ public class PresetWindowLevel {
     public LutShape getShape() {
         return shape;
     }
+    
+    public boolean isAutoLevel() {
+        return keyCode == KeyEvent.VK_0;
+    }
 
     @Override
     public String toString() {
@@ -108,21 +109,39 @@ public class PresetWindowLevel {
     }
 
     @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + level.hashCode();
+        result = prime * result + name.hashCode();
+        result = prime * result + shape.hashCode();
+        result = prime * result + window.hashCode();
+        return result;
+    }
+
+    @Override
     public boolean equals(Object obj) {
-        if (obj instanceof PresetWindowLevel) {
-            PresetWindowLevel p = (PresetWindowLevel) obj;
-            return window.equals(p.window) && level.equals(p.level) && name.equals(p.name) && shape.equals(p.shape);
+        if (this == obj) {
+            return true;
         }
-        return false;
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        PresetWindowLevel other = (PresetWindowLevel) obj;
+        return name.equals(other.name) && level.equals(other.level) && window.equals(other.window)
+            && shape.equals(other.shape);
     }
 
     public static List<PresetWindowLevel> getPresetCollection(DicomImageElement image, TagReadable tagable,
-        boolean pixelPadding) {
+        boolean pixelPadding, String type) {
         if (image == null || tagable == null) {
             return null;
         }
 
-        String dicomKeyWord = " " + Messages.getString("PresetWindowLevel.dcm_preset"); //$NON-NLS-1$ //$NON-NLS-2$
+        String dicomKeyWord = " " + type; //$NON-NLS-1$
 
         ArrayList<PresetWindowLevel> presetList = new ArrayList<>();
 
@@ -173,7 +192,7 @@ public class PresetWindowLevel {
             }
         }
 
-        LookupTableJAI[] voiLUTsData = (LookupTableJAI[]) tagable.getTagValue(TagW.VOILUTsData);
+        LookupTableCV[] voiLUTsData = (LookupTableCV[]) tagable.getTagValue(TagW.VOILUTsData);
         String[] voiLUTsExplanation = (String[]) tagable.getTagValue(TagW.VOILUTsExplanation); // optional attribute
 
         if (voiLUTsData != null) {
@@ -204,15 +223,15 @@ public class PresetWindowLevel {
             }
         }
 
-        PresetWindowLevel autoLevel =
-            new PresetWindowLevel(fullDynamicExplanation, image.getFullDynamicWidth(tagable, pixelPadding),
-                image.getFullDynamicCenter(tagable, pixelPadding), defaultLutShape);
+        PresetWindowLevel autoLevel = new PresetWindowLevel(Messages.getString("PresetWindowLevel.full"), //$NON-NLS-1$
+            image.getFullDynamicWidth(tagable, pixelPadding), image.getFullDynamicCenter(tagable, pixelPadding),
+            defaultLutShape);
         // Set O shortcut for auto levels
         autoLevel.setKeyCode(KeyEvent.VK_0);
         presetList.add(autoLevel);
 
-        // Exclude Secondary Capture CT
-        if (image.getBitsStored() > 8) {
+        // Exclude Secondary Capture CT and when PR preset
+        if (image.getBitsStored() > 8 && !"[PR]".equals(type)) { //$NON-NLS-1$
             List<PresetWindowLevel> modPresets = presetListByModality.get(TagD.getTagValue(image, Tag.Modality));
             if (modPresets != null) {
                 presetList.addAll(modPresets);
@@ -222,7 +241,7 @@ public class PresetWindowLevel {
         return presetList;
     }
 
-    public static PresetWindowLevel buildPresetFromLutData(LookupTableJAI voiLUTsData, DicomImageElement image,
+    public static PresetWindowLevel buildPresetFromLutData(LookupTableCV voiLUTsData, DicomImageElement image,
         TagReadable tagable, boolean pixelPadding, String explanation) {
         if (voiLUTsData == null || explanation == null) {
             return null;
@@ -252,7 +271,7 @@ public class PresetWindowLevel {
             maxValueLookup = maxAllocatedValue;
         }
 
-        double fullDynamicWidth = maxValueLookup - minValueLookup;
+        double fullDynamicWidth = (double) maxValueLookup - minValueLookup;
         double fullDynamicCenter = minValueLookup + fullDynamicWidth / 2f;
 
         LutShape newLutShape = new LutShape(voiLUTsData, explanation);
@@ -266,12 +285,12 @@ public class PresetWindowLevel {
         XMLStreamReader xmler = null;
         InputStream stream = null;
         try {
-            File file = ResourceUtil.getResource("presets.xml");
-            if (!file.canRead()){
+            File file = ResourceUtil.getResource("presets.xml"); //$NON-NLS-1$
+            if (!file.canRead()) {
                 return Collections.emptyMap();
             }
             XMLInputFactory xmlif = XMLInputFactory.newInstance();
-            stream = new FileInputStream(file); //$NON-NLS-1$
+            stream = new FileInputStream(file); // $NON-NLS-1$
             xmler = xmlif.createXMLStreamReader(stream);
 
             int eventType;

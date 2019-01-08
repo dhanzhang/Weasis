@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.util;
 
 import java.awt.Color;
@@ -25,8 +25,8 @@ import java.io.IOException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.text.ParseException;
+import java.util.Objects;
 
-import javax.media.jai.PlanarImage;
 import javax.swing.AbstractAction;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -48,20 +48,15 @@ import javax.swing.UIManager;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.event.HyperlinkListener;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
 import javax.swing.plaf.basic.BasicComboPopup;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableModel;
 import javax.swing.text.DefaultFormatterFactory;
-import javax.swing.text.MutableAttributeSet;
-import javax.swing.text.SimpleAttributeSet;
 import javax.swing.text.Style;
 import javax.swing.text.StyleConstants;
-import javax.swing.text.StyleContext;
 import javax.swing.text.StyledDocument;
-import javax.swing.text.TabSet;
-import javax.swing.text.TabStop;
+import javax.swing.text.html.HTMLEditorKit;
+import javax.swing.text.html.StyleSheet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,8 +65,6 @@ import org.weasis.core.api.util.StringUtil;
 
 /**
  * The Class JMVUtils.
- *
- * @author Nicolas Roduit
  */
 public class JMVUtils {
     private static final Logger LOGGER = LoggerFactory.getLogger(JMVUtils.class);
@@ -83,10 +76,18 @@ public class JMVUtils {
         super();
     }
 
+    /**
+     * @deprecated use LangUtil instead
+     */
+    @Deprecated
     public static boolean getNULLtoFalse(Object val) {
         return Boolean.TRUE.equals(val);
     }
 
+    /**
+     * @deprecated use LangUtil instead
+     */
+    @Deprecated
     public static boolean getNULLtoTrue(Object val) {
         if (val instanceof Boolean) {
             return ((Boolean) val).booleanValue();
@@ -94,36 +95,7 @@ public class JMVUtils {
         return true;
     }
 
-    public static int getNumberOfInvolvedTiles(PlanarImage img, Rectangle bound) {
-        int maxTileIndexX = img.getMinTileX() + img.getNumXTiles();
-        int maxTileIndexY = img.getMinTileY() + img.getNumYTiles();
-        int nbTiles = 0;
-        // Loop over tiles within the clipping region
-        for (int tj = img.getMinTileY(); tj < maxTileIndexY; tj++) {
-            for (int ti = img.getMinTileX(); ti < maxTileIndexX; ti++) {
-                if (bound == null || bound.intersects(img.getTileRect(ti, tj))) {
-                    nbTiles++;
-                }
-            }
-        }
-        return nbTiles;
-    }
-
-    public static int getNumberOfInvolvedTilesOnXaxis(PlanarImage img, Rectangle area) {
-        int maxTileIndexX = img.getMinTileX() + img.getNumXTiles();
-        int nbTiles = 0;
-        Rectangle bound = area.getBounds();
-        bound.y = img.tileYToY(img.getMinTileY());
-        // Loop over tiles within the clipping region
-        for (int ti = img.getMinTileX(), tj = img.getMinTileY(); ti < maxTileIndexX; ti++) {
-            if (bound.intersects(img.getTileRect(ti, tj))) {
-                nbTiles++;
-            }
-        }
-        return nbTiles;
-    }
-
-    public static void setPreferredWidth(JComponent component, int width, int minWidth) {
+    public static void setPreferredWidth(Component component, int width, int minWidth) {
         Dimension dim = component.getPreferredSize();
         dim.width = width;
         component.setPreferredSize(dim);
@@ -132,11 +104,11 @@ public class JMVUtils {
         component.setMinimumSize(dim);
     }
 
-    public static void setPreferredWidth(JComponent component, int width) {
+    public static void setPreferredWidth(Component component, int width) {
         setPreferredWidth(component, width, 50);
     }
 
-    public static void setPreferredHeight(JComponent component, int height) {
+    public static void setPreferredHeight(Component component, int height) {
         Dimension dim = component.getPreferredSize();
         dim.height = height;
         component.setPreferredSize(dim);
@@ -169,19 +141,19 @@ public class JMVUtils {
         }
     }
 
-    public static void formatTableHeaders(JTable table, int alignement) {
+    public static void formatTableHeaders(JTable table, int alignment) {
         TableHeaderRenderer renderer = new TableHeaderRenderer();
-        renderer.setHorizontalAlignment(alignement);
+        renderer.setHorizontalAlignment(alignment);
         for (int i = 0; i < table.getColumnCount(); i++) {
             TableColumn col = table.getColumnModel().getColumn(i);
             col.setHeaderRenderer(renderer);
         }
     }
 
-    public static void formatTableHeaders(JTable table, int alignement, int columnSize) {
+    public static void formatTableHeaders(JTable table, int alignment, int columnSize) {
         TableHeaderRenderer renderer = new TableHeaderRenderer();
 
-        renderer.setHorizontalAlignment(alignement);
+        renderer.setHorizontalAlignment(alignment);
         for (int i = 0; i < table.getColumnCount(); i++) {
             TableColumn col = table.getColumnModel().getColumn(i);
             col.setHeaderRenderer(renderer);
@@ -198,33 +170,6 @@ public class JMVUtils {
             names[i] = model.getColumnName(i);
         }
         return names;
-    }
-
-    public static void setList(JComboBox jComboBox, Object first, Object[] items) {
-        jComboBox.removeAllItems();
-        if (first != null) {
-            jComboBox.addItem(first);
-        }
-        for (Object object : items) {
-            jComboBox.addItem(object);
-        }
-    }
-
-    public static void setList(JComboBox jComboBox, Object[] items, Object last) {
-        jComboBox.removeAllItems();
-        for (Object object : items) {
-            jComboBox.addItem(object);
-        }
-        if (last != null) {
-            jComboBox.addItem(last);
-        }
-    }
-
-    public static void setList(JComboBox jComboBox, java.util.List list) {
-        jComboBox.removeAllItems();
-        for (int i = 0; i < list.size(); i++) {
-            jComboBox.addItem(list.get(i));
-        }
     }
 
     public static void addChangeListener(JSlider slider, ChangeListener listener) {
@@ -336,17 +281,20 @@ public class JMVUtils {
         }
     }
 
-    public static void addStylesToDocument(StyledDocument doc, Color textColor) {
+    public static HTMLEditorKit buildHTMLEditorKit(JComponent component) {
+        Objects.requireNonNull(component);
+        HTMLEditorKit kit = new HTMLEditorKit();
+        StyleSheet ss = kit.getStyleSheet();
+        ss.addRule("body {font-family:sans-serif;font-size:12pt;background-color:#" //$NON-NLS-1$
+            + Integer.toHexString((component.getBackground().getRGB() & 0xffffff) | 0x1000000).substring(1) + ";color:#" //$NON-NLS-1$
+            + Integer.toHexString((component.getForeground().getRGB() & 0xffffff) | 0x1000000).substring(1)
+            + ";margin:3;font-weight:normal;}"); //$NON-NLS-1$
+        return kit;
+    }
+
+    public static void addStylesToHTML(StyledDocument doc) {
         // Initialize some styles.
-        final MutableAttributeSet def = new SimpleAttributeSet();
-        Style style = StyleContext.getDefaultStyleContext().getStyle(StyleContext.DEFAULT_STYLE);
-        Style regular = doc.addStyle("regular", style); //$NON-NLS-1$
-        StyleConstants.setFontFamily(def, "SansSerif"); //$NON-NLS-1$
-        StyleConstants.setForeground(def, textColor == null ? UIManager.getColor("text") : textColor);
-        TabStop[] tabs = new TabStop[1];
-        tabs[0] = new TabStop(25.0f, TabStop.ALIGN_LEFT, TabStop.LEAD_NONE);
-        StyleConstants.setTabSet(def, new TabSet(tabs));
-        doc.setParagraphAttributes(0, Integer.MAX_VALUE, def, true);
+        Style regular = doc.getStyle("default"); //$NON-NLS-1$
         Style s = doc.addStyle("title", regular); //$NON-NLS-1$
         StyleConstants.setFontSize(s, 16);
         StyleConstants.setBold(s, true);
@@ -369,21 +317,17 @@ public class JMVUtils {
         return bounds.width;
     }
 
-    public static void addTooltipToComboList(final JComboBox combo) {
+    public static void addTooltipToComboList(final JComboBox<?> combo) {
         Object comp = combo.getUI().getAccessibleChild(combo, 0);
         if (comp instanceof BasicComboPopup) {
             final BasicComboPopup popup = (BasicComboPopup) comp;
-            popup.getList().getSelectionModel().addListSelectionListener(new ListSelectionListener() {
-
-                @Override
-                public void valueChanged(ListSelectionEvent e) {
-                    if (!e.getValueIsAdjusting()) {
-                        ListSelectionModel model = (ListSelectionModel) e.getSource();
-                        int first = model.getMinSelectionIndex();
-                        if (first >= 0) {
-                            Object item = combo.getItemAt(first);
-                            ((JComponent) combo.getRenderer()).setToolTipText(item.toString());
-                        }
+            popup.getList().getSelectionModel().addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting()) {
+                    ListSelectionModel model = (ListSelectionModel) e.getSource();
+                    int first = model.getMinSelectionIndex();
+                    if (first >= 0) {
+                        Object item = combo.getItemAt(first);
+                        ((JComponent) combo.getRenderer()).setToolTipText(item.toString());
                     }
                 }
             });
@@ -418,18 +362,15 @@ public class JMVUtils {
     }
 
     public static HyperlinkListener buildHyperlinkListener() {
-        return new HyperlinkListener() {
-            @Override
-            public void hyperlinkUpdate(HyperlinkEvent e) {
-                JTextPane pane = (JTextPane) e.getSource();
-                if (e.getEventType() == HyperlinkEvent.EventType.ENTERED) {
-                    pane.setToolTipText(e.getDescription());
-                } else if (e.getEventType() == HyperlinkEvent.EventType.EXITED) {
-                    pane.setToolTipText(null);
-                } else if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
-                    Component parent = e.getSource() instanceof Component ? (Component) e.getSource() : null;
-                    openInDefaultBrowser(parent, e.getURL());
-                }
+        return e -> {
+            JTextPane pane = (JTextPane) e.getSource();
+            if (e.getEventType() == HyperlinkEvent.EventType.ENTERED) {
+                pane.setToolTipText(e.getDescription());
+            } else if (e.getEventType() == HyperlinkEvent.EventType.EXITED) {
+                pane.setToolTipText(null);
+            } else if (e.getEventType() == HyperlinkEvent.EventType.ACTIVATED) {
+                Component parent = e.getSource() instanceof Component ? (Component) e.getSource() : null;
+                openInDefaultBrowser(parent, e.getURL());
             }
         };
     }

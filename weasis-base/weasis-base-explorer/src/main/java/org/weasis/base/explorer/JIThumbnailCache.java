@@ -1,7 +1,16 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.base.explorer;
 
 import java.awt.image.BufferedImage;
-import java.awt.image.RenderedImage;
 import java.io.File;
 import java.net.URI;
 import java.util.Collections;
@@ -13,34 +22,29 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import javax.media.jai.PlanarImage;
-import javax.media.jai.operator.SubsampleAverageDescriptor;
-import javax.swing.Icon;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.weasis.base.explorer.list.IThumbnailList;
-import org.weasis.base.explorer.list.IThumbnailModel;
+import org.weasis.base.explorer.list.ThumbnailList;
 import org.weasis.core.api.gui.util.GuiExecutor;
 import org.weasis.core.api.image.util.ImageFiler;
 import org.weasis.core.api.media.data.ImageElement;
-import org.weasis.core.api.media.data.Thumbnail;
+import org.weasis.core.api.media.data.MediaElement;
 import org.weasis.core.api.util.ThreadUtil;
+import org.weasis.opencv.data.PlanarImage;
+import org.weasis.opencv.op.ImageConversion;
+import org.weasis.opencv.op.ImageProcessor;
 
 public final class JIThumbnailCache {
     private static final Logger LOGGER = LoggerFactory.getLogger(JIThumbnailCache.class);
 
-    private static final LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
+    private final LinkedBlockingQueue<Runnable> queue = new LinkedBlockingQueue<>();
     // Set only one concurrent thread. The time consuming part is in loading image thread (see ImageElement)
-    private static final ExecutorService qExecutor =
-        new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, queue, ThreadUtil.getThreadFactory("Thumbnail Cache"));
-
-    private static final JIThumbnailCache instance = new JIThumbnailCache();
+    private final ExecutorService qExecutor =
+        new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, queue, ThreadUtil.getThreadFactory("Thumbnail Cache")); //$NON-NLS-1$
 
     private final Map<URI, ThumbnailIcon> cachedThumbnails;
 
-    private JIThumbnailCache() {
-
+    public JIThumbnailCache() {
         this.cachedThumbnails = Collections.synchronizedMap(new LinkedHashMap<URI, ThumbnailIcon>(80) {
 
             private static final long serialVersionUID = 5981678679620794224L;
@@ -54,36 +58,32 @@ public final class JIThumbnailCache {
         });
     }
 
-    public static JIThumbnailCache getInstance() {
-        return instance;
-    }
-
     public synchronized void invalidate() {
         this.cachedThumbnails.clear();
     }
 
-    public static void removeInQueue(ImageElement imgElement) {
+    public void removeInQueue(ImageElement imgElement) {
         Runnable r = null;
         for (Runnable runnable : queue) {
             if (Objects.equals(imgElement, ((ThumbnailRunnable) runnable).getDiskObject())) {
                 r = runnable;
             }
         }
-        if (r != null) {
-            queue.remove(r);
+        if (r != null && !queue.remove(r)) {
+            LOGGER.error("Cannot remove thumbnail from the queue"); //$NON-NLS-1$
         }
     }
 
-    public Icon getThumbnailFor(final ImageElement diskObject, final IThumbnailList aThumbnailList, final int index) {
+    public ThumbnailIcon getThumbnailFor(final ImageElement diskObject,
+        final ThumbnailList<? extends MediaElement> aThumbnailList, final int index) {
         try {
-
             final ThumbnailIcon jiIcon = this.cachedThumbnails.get(diskObject.getMediaURI());
             if (jiIcon != null) {
                 return jiIcon;
             }
 
         } catch (final Exception e) {
-            LOGGER.error("", e);
+            LOGGER.error("", e); //$NON-NLS-1$
         }
         if (!diskObject.isLoading()) {
             loadThumbnail(diskObject, aThumbnailList, index);
@@ -91,7 +91,7 @@ public final class JIThumbnailCache {
         return null;
     }
 
-    private static void loadThumbnail(final ImageElement diskObject, final IThumbnailList thumbnailList,
+    private void loadThumbnail(final ImageElement diskObject, final ThumbnailList<? extends MediaElement> thumbnailList,
         final int index) {
         if ((index > thumbnailList.getLastVisibleIndex()) || (index < thumbnailList.getFirstVisibleIndex())) {
             return;
@@ -103,38 +103,37 @@ public final class JIThumbnailCache {
         }
         cleanPending();
         ThumbnailRunnable runnable = new ThumbnailRunnable(diskObject, thumbnailList, index);
-        JIThumbnailCache.qExecutor.execute(runnable);
+        qExecutor.execute(runnable);
     }
 
-    private static void cleanPending() {
+    private void cleanPending() {
         for (Runnable runnable : queue) {
             ThumbnailRunnable r = (ThumbnailRunnable) runnable;
             int index = r.getIndex();
             if ((index > r.getThumbnailList().getLastVisibleIndex())
                 || (index < r.getThumbnailList().getFirstVisibleIndex())) {
-                JIThumbnailCache.removeInQueue(r.getDiskObject());
+                removeInQueue(r.getDiskObject());
             }
         }
     }
 
-    static class ThumbnailRunnable implements Runnable {
+    class ThumbnailRunnable implements Runnable {
         final ImageElement diskObject;
-        final IThumbnailList thumbnailList;
+        final ThumbnailList<? extends MediaElement> thumbnailList;
         final int index;
-        final IThumbnailModel modelList;
 
-        public ThumbnailRunnable(ImageElement diskObject, IThumbnailList thumbnailList, int index) {
+        public ThumbnailRunnable(ImageElement diskObject, ThumbnailList<? extends MediaElement> thumbnailList,
+            int index) {
             this.diskObject = diskObject;
             this.thumbnailList = thumbnailList;
             this.index = index;
-            this.modelList = thumbnailList.getThumbnailListModel();
         }
 
         public ImageElement getDiskObject() {
             return diskObject;
         }
 
-        public IThumbnailList getThumbnailList() {
+        public ThumbnailList<? extends MediaElement> getThumbnailList() {
             return thumbnailList;
         }
 
@@ -142,43 +141,36 @@ public final class JIThumbnailCache {
             return index;
         }
 
-        public IThumbnailModel getModelList() {
-            return modelList;
-        }
-
         @Override
         public void run() {
-            RenderedImage img = null;
+            PlanarImage img = null;
 
             // Get the final that contain the thumbnail when the uncompress mode is activated
             File file = diskObject.getFile();
-            if (file != null) {
-                img = ImageFiler.getThumbnailInTiff(file);
+            if (file != null && file.getName().endsWith(".wcv")) { //$NON-NLS-1$
+                File thumbFile = new File(ImageFiler.changeExtension(file.getPath(), ".jpg")); //$NON-NLS-1$
+                if (thumbFile.canRead()) {
+                    img = ImageProcessor.readImage(thumbFile);
+                }
             }
 
             if (img == null) {
                 img = diskObject.getRenderedImage(diskObject.getImage(null));
             }
-            
+
             if (img == null) {
                 return;
             }
 
-            final double scale = Math.min(ThumbnailRenderer.ICON_DIM.height / (double) img.getHeight(),
-                ThumbnailRenderer.ICON_DIM.width / (double) img.getWidth());
-
-            final BufferedImage tIcon =
-                scale <= 1.0
-                    ? scale > 0.005 ? SubsampleAverageDescriptor
-                        .create(img, scale, scale, Thumbnail.DownScaleQualityHints).getAsBufferedImage() : null
-                    : PlanarImage.wrapRenderedImage(img).getAsBufferedImage();
+            final BufferedImage tIcon = ImageConversion
+                .toBufferedImage((PlanarImage) ImageProcessor.buildThumbnail(img, ThumbnailRenderer.ICON_DIM, true));
 
             // Prevent to many files open on Linux (Ubuntu => 1024) and close image stream
             diskObject.removeImageFromCache();
 
             GuiExecutor.instance().execute(() -> {
                 if (tIcon != null) {
-                    getInstance().cachedThumbnails.put(diskObject.getMediaURI(), new ThumbnailIcon(tIcon));
+                    cachedThumbnails.put(diskObject.getMediaURI(), new ThumbnailIcon(tIcon));
                 }
                 thumbnailList.getThumbnailListModel().notifyAsUpdated(index);
             });

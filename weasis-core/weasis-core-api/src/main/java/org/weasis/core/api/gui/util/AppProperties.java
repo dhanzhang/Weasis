@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.util;
 
 import java.io.File;
@@ -17,6 +17,7 @@ import javax.swing.LookAndFeel;
 import org.osgi.framework.Bundle;
 import org.osgi.framework.BundleContext;
 import org.osgi.framework.FrameworkUtil;
+import org.osgi.framework.ServiceReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.core.api.util.FileUtil;
@@ -24,7 +25,6 @@ import org.weasis.core.api.util.FileUtil;
 /**
  * The Class AppProperties.
  *
- * @author Nicolas Roduit
  */
 public class AppProperties {
     private static final Logger LOGGER = LoggerFactory.getLogger(AppProperties.class);
@@ -32,24 +32,24 @@ public class AppProperties {
     /**
      * The version of the application (for display)
      */
-    public static final String WEASIS_VERSION = System.getProperty("weasis.version", "2.5.x"); //$NON-NLS-1$
+    public static final String WEASIS_VERSION = System.getProperty("weasis.version", "2.5.x"); //$NON-NLS-1$ //$NON-NLS-2$
 
     /**
      * The name of the application (for display)
      */
-    public static final String WEASIS_NAME = System.getProperty("weasis.name", "Weasis"); //$NON-NLS-1$
+    public static final String WEASIS_NAME = System.getProperty("weasis.name", "Weasis"); //$NON-NLS-1$ //$NON-NLS-2$
 
     /**
      * The current user of the application (defined either in JNLP by the property "weasis.user" or by the user of the
      * operating system session if the property is null)
      */
-    public static final String WEASIS_USER = System.getProperty("weasis.user", "user"); //$NON-NLS-1$
+    public static final String WEASIS_USER = System.getProperty("weasis.user", "user"); //$NON-NLS-1$ //$NON-NLS-2$
 
     /**
      * The name of the configuration profile (defined in config-ext.properties). The value is “default” if null. This
      * property allows to have separated preferences (in a new directory).
      */
-    public static final String WEASIS_PROFILE = System.getProperty("weasis.profile", "default"); //$NON-NLS-1$
+    public static final String WEASIS_PROFILE = System.getProperty("weasis.profile", "default"); //$NON-NLS-1$ //$NON-NLS-2$
 
     /**
      * The directory for writing temporary files
@@ -84,7 +84,7 @@ public class AppProperties {
      * The path of the directory “.weasis” (containing the installation and the preferences)
      */
     public static final String WEASIS_PATH =
-        System.getProperty("weasis.path", APP_TEMP_DIR + File.separator + ".weasis"); //$NON-NLS-1$
+        System.getProperty("weasis.path", APP_TEMP_DIR + File.separator + ".weasis"); //$NON-NLS-1$ //$NON-NLS-2$
 
     public static final File FILE_CACHE_DIR = buildAccessibleTempDirectory("cache"); //$NON-NLS-1$
 
@@ -96,10 +96,15 @@ public class AppProperties {
 
     }
 
-    public static BundleContext getBundleContext(Class<?> clazz) {
-        if (clazz != null) {
-            Bundle bundle = FrameworkUtil.getBundle(clazz);
-            return bundle == null ? null : bundle.getBundleContext();
+    public static BundleContext getBundleContext() {
+        Bundle bundle = FrameworkUtil.getBundle(AppProperties.class);
+        return bundle == null ? null : bundle.getBundleContext();
+    }
+
+    public static BundleContext getBundleContext(ServiceReference<?> sRef) {
+        if (sRef != null) {
+            Bundle bundle = sRef.getBundle();
+            return bundle == null ? getBundleContext() : bundle.getBundleContext();
         }
         return null;
     }

@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.base.viewer2d.dockable;
 
 import java.awt.BorderLayout;
@@ -17,7 +17,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
-import java.util.Objects;
+import java.util.Optional;
 
 import javax.swing.ImageIcon;
 import javax.swing.JCheckBox;
@@ -35,7 +35,7 @@ import org.weasis.base.viewer2d.View2dContainer;
 import org.weasis.core.api.gui.util.ActionW;
 import org.weasis.core.api.gui.util.JMVUtils;
 import org.weasis.core.api.media.data.ImageElement;
-import org.weasis.core.api.media.data.Thumbnail;
+import org.weasis.core.api.media.data.Thumbnailable;
 import org.weasis.core.ui.docking.PluginTool;
 import org.weasis.core.ui.editor.SeriesViewerEvent;
 import org.weasis.core.ui.editor.SeriesViewerEvent.EVENT;
@@ -43,10 +43,7 @@ import org.weasis.core.ui.editor.SeriesViewerListener;
 import org.weasis.core.ui.editor.image.ImageViewerPlugin;
 import org.weasis.core.ui.editor.image.Panner;
 import org.weasis.core.ui.editor.image.ViewCanvas;
-import org.weasis.core.ui.model.layer.GraphicLayer;
-import org.weasis.core.ui.model.layer.Layer;
 import org.weasis.core.ui.model.layer.LayerAnnotation;
-import org.weasis.core.ui.model.layer.LayerType;
 
 import bibliothek.gui.dock.common.CLocation;
 import it.cnr.imaa.essi.lablib.gui.checkboxtree.CheckboxTree;
@@ -84,9 +81,9 @@ public class DisplayTool extends PluginTool implements SeriesViewerListener {
     public void iniTree() {
         tree.getCheckingModel().setCheckingMode(CheckingMode.SIMPLE);
 
-        image = new DefaultMutableTreeNode(Messages.getString("DisplayTool.img"), true);
+        image = new DefaultMutableTreeNode(Messages.getString("DisplayTool.img"), true); //$NON-NLS-1$
         rootNode.add(image);
-        info = new DefaultMutableTreeNode(Messages.getString("DisplayTool.annotations"), true);
+        info = new DefaultMutableTreeNode(Messages.getString("DisplayTool.annotations"), true); //$NON-NLS-1$
         info.add(new DefaultMutableTreeNode(LayerAnnotation.ANNOTATIONS, true));
         info.add(new DefaultMutableTreeNode(LayerAnnotation.SCALE, true));
         info.add(new DefaultMutableTreeNode(LayerAnnotation.LUT, true));
@@ -151,7 +148,7 @@ public class DisplayTool extends PluginTool implements SeriesViewerListener {
             LayerAnnotation layer = view.getInfoLayer();
             if (layer != null) {
                 initPathSelection(getTreePath(info), layer.getVisible());
-                Enumeration en = info.children();
+                Enumeration<?> en = info.children();
                 while (en.hasMoreElements()) {
                     Object node = en.nextElement();
                     if (node instanceof TreeNode) {
@@ -161,8 +158,6 @@ public class DisplayTool extends PluginTool implements SeriesViewerListener {
                 }
             }
 
-            initLayers(view);
-
             ImageElement img = view.getImage();
             if (img != null) {
                 Panner<?> panner = view.getPanner();
@@ -171,8 +166,8 @@ public class DisplayTool extends PluginTool implements SeriesViewerListener {
                     if (cps > 0) {
                         Component cp = panelFoot.getComponent(0);
                         if (cp != panner) {
-                            if (cp instanceof Thumbnail) {
-                                ((Thumbnail) cp).removeMouseAndKeyListener();
+                            if (cp instanceof Thumbnailable) {
+                                ((Thumbnailable) cp).removeMouseAndKeyListener();
                             }
                             panner.registerListeners();
                             panelFoot.removeAll();
@@ -191,31 +186,9 @@ public class DisplayTool extends PluginTool implements SeriesViewerListener {
         }
     }
 
-    private void initLayers(ViewCanvas<?> view) {
-        // Drawings node
-        drawings.removeAllChildren();
-        Boolean draw = (Boolean) view.getActionValue(ActionW.DRAWINGS.cmd());
-        TreePath drawingsPath = getTreePath(drawings);
-        initPathSelection(getTreePath(drawings), draw == null ? true : draw);
-
-        List<GraphicLayer> layers = view.getGraphicManager().getLayers();
-        layers.removeIf(l -> l.getType() == LayerType.TEMP_DRAW);
-        for (GraphicLayer layer : layers) {
-            DefaultMutableTreeNode treeNode = new DefaultMutableTreeNode(layer, true);
-            drawings.add(treeNode);
-            initPathSelection(getTreePath(treeNode), layer.getVisible());
-        }
-
-        // Reload tree node as model does not fire any events to UI
-        DefaultTreeModel dtm = (DefaultTreeModel) tree.getModel();
-        dtm.reload(drawings);
-        tree.expandPath(drawingsPath);
-    }
-
     private void treeValueChanged(TreeCheckingEvent e) {
         if (!initPathSelection) {
             TreePath path = e.getPath();
-            Object source = e.getSource();
             boolean selected = e.isCheckedPath();
             Object selObject = path.getLastPathComponent();
             Object parent = null;
@@ -230,55 +203,40 @@ public class DisplayTool extends PluginTool implements SeriesViewerListener {
                     views = container.getImagePanels();
                 } else {
                     views = new ArrayList<>(1);
-                    ViewCanvas<ImageElement> view = container.getSelectedImagePane();
-                    if (view != null) {
-                        views.add(view);
-                    }
+                    Optional.ofNullable(container.getSelectedImagePane()).ifPresent(views::add);
                 }
             }
-            if (views != null) {
-                if (rootNode.equals(parent)) {
-                    if (image.equals(selObject)) {
-                        for (ViewCanvas<ImageElement> v : views) {
-                            if (selected != v.getImageLayer().getVisible()) {
-                                v.getImageLayer().setVisible(selected);
-                                v.getJComponent().repaint();
-                            }
-                        }
-                    } else if (info.equals(selObject)) {
-                        for (ViewCanvas<ImageElement> v : views) {
-                            if (selected != v.getInfoLayer().getVisible()) {
-                                v.getInfoLayer().setVisible(selected);
-                                v.getJComponent().repaint();
-                            }
-                        }
-                    } else if (drawings.equals(selObject)) {
-                        for (ViewCanvas<ImageElement> v : views) {
-                            v.setDrawingsVisibility(selected);
-                        }
-                    }
+            if (views == null) {
+                return;
+            }
 
-                } else if (info.equals(parent)) {
-                    if (selObject != null) {
-                        for (ViewCanvas<ImageElement> v : views) {
-                            LayerAnnotation layer = v.getInfoLayer();
-                            if (layer != null) {
-                                if (layer.setDisplayPreferencesValue(selObject.toString(), selected)) {
-                                    v.getJComponent().repaint();
-                                }
-                            }
+            if (rootNode.equals(parent)) {
+                if (image.equals(selObject)) {
+                    for (ViewCanvas<ImageElement> v : views) {
+                        if (selected != v.getImageLayer().getVisible()) {
+                            v.getImageLayer().setVisible(selected);
+                            v.getJComponent().repaint();
                         }
                     }
-                } else if (drawings.equals(parent)) {
-                    if (selObject instanceof DefaultMutableTreeNode) {
-                        if (((DefaultMutableTreeNode) selObject).getUserObject() instanceof LayerType) {
-                            Layer layer = (Layer) ((DefaultMutableTreeNode) selObject).getUserObject();
-                            for (ViewCanvas<ImageElement> v : views) {
-                                if (!Objects.equals(layer.getVisible(), selected)) {
-                                    layer.setVisible(selected);
-                                    v.getJComponent().repaint();
-                                }
-                            }
+                } else if (info.equals(selObject)) {
+                    for (ViewCanvas<ImageElement> v : views) {
+                        if (selected != v.getInfoLayer().getVisible()) {
+                            v.getInfoLayer().setVisible(selected);
+                            v.getJComponent().repaint();
+                        }
+                    }
+                } else if (drawings.equals(selObject)) {
+                    for (ViewCanvas<ImageElement> v : views) {
+                        v.setDrawingsVisibility(selected);
+                    }
+                }
+
+            } else if (info.equals(parent)) {
+                if (selObject != null) {
+                    for (ViewCanvas<ImageElement> v : views) {
+                        LayerAnnotation layer = v.getInfoLayer();
+                        if (layer != null && layer.setDisplayPreferencesValue(selObject.toString(), selected)) {
+                            v.getJComponent().repaint();
                         }
                     }
                 }
@@ -317,51 +275,22 @@ public class DisplayTool extends PluginTool implements SeriesViewerListener {
         EVENT e = event.getEventType();
         if (EVENT.SELECT_VIEW.equals(e) && event.getSeriesViewer() instanceof View2dContainer) {
             iniTreeValues(((View2dContainer) event.getSeriesViewer()).getSelectedImagePane());
-        } else if (EVENT.ADD_LAYER.equals(e)) {
-            Object obj = event.getSharedObject();
-            if (obj instanceof Layer) {
-                DefaultTreeModel dtm = (DefaultTreeModel) tree.getModel();
-                DefaultMutableTreeNode node = new DefaultMutableTreeNode(obj, true);
-                drawings.add(node);
-                dtm.nodesWereInserted(drawings, new int[] { drawings.getIndex(node) });
-                if (event.getSeriesViewer() instanceof ImageViewerPlugin) {
-                    ViewCanvas<?> pane = ((ImageViewerPlugin<?>) event.getSeriesViewer()).getSelectedImagePane();
-                    if (pane != null && ((Layer) obj).getVisible()) {
-                        tree.addCheckingPath(getTreePath(node));
-                    }
-                }
-            }
-        } else if (EVENT.REMOVE_LAYER.equals(e)) {
-            Object obj = event.getSharedObject();
-            if (obj instanceof Layer) {
-                Layer layer = (Layer) obj;
-                Enumeration<?> en = drawings.children();
-                while (en.hasMoreElements()) {
-                    Object node = en.nextElement();
-                    if (node instanceof DefaultMutableTreeNode
-                        && layer.equals(((DefaultMutableTreeNode) node).getUserObject())) {
-                        DefaultMutableTreeNode n = (DefaultMutableTreeNode) node;
-                        TreeNode parent = n.getParent();
-                        int index = parent.getIndex(n);
-                        n.removeFromParent();
-                        DefaultTreeModel dtm = (DefaultTreeModel) tree.getModel();
-                        dtm.nodesWereRemoved(parent, new int[] { index }, new TreeNode[] { n });
-                    }
-                }
-            }
         }
     }
 
     private static void expandTree(JTree tree, DefaultMutableTreeNode start) {
-        for (Enumeration<?> children = start.children(); children.hasMoreElements();) {
-            DefaultMutableTreeNode dtm = (DefaultMutableTreeNode) children.nextElement();
-            if (!dtm.isLeaf()) {
-                TreePath tp = new TreePath(dtm.getPath());
-                tree.expandPath(tp);
-                expandTree(tree, dtm);
+        Enumeration<?> children = start.children();
+        while (children.hasMoreElements()) {
+            Object child = children.nextElement();
+            if (child instanceof DefaultMutableTreeNode) {
+                DefaultMutableTreeNode dtm = (DefaultMutableTreeNode) child;
+                if (!dtm.isLeaf()) {
+                    TreePath tp = new TreePath(dtm.getPath());
+                    tree.expandPath(tp);
+                    expandTree(tree, dtm);
+                }
             }
         }
-        return;
     }
 
 }

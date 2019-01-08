@@ -1,21 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.codec.display;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
@@ -37,8 +38,9 @@ import org.weasis.dicom.codec.TagD;
 public class ModalityView {
     private static final Logger LOGGER = LoggerFactory.getLogger(ModalityView.class);
 
-    public static final Map<Modality, ModalityInfoData> MODALITY_VIEW_MAP = new HashMap<>();
-    public static final ModalityInfoData DEFAULT_MODALITY_VIEW = new ModalityInfoData(Modality.Default, null);
+    static final Map<Modality, ModalityInfoData> MODALITY_VIEW_MAP = new EnumMap<>(Modality.class);
+
+    public static final ModalityInfoData DEFAULT_MODALITY_VIEW = new ModalityInfoData(Modality.DEFAULT, null);
 
     static {
         // Format associated to DICOM field:
@@ -89,19 +91,26 @@ public class ModalityView {
          * Spacing Between Slices (0018,0088), if present, else a value derived from successive values of Image Position
          * (Patient) (0020,0032) perpendicular to the Image Orientation (Patient) (0020,0037)
          */
-        MODALITY_VIEW_MAP.put(Modality.Default, DEFAULT_MODALITY_VIEW);
+        MODALITY_VIEW_MAP.put(Modality.DEFAULT, DEFAULT_MODALITY_VIEW);
         readTagDisplayByModality();
+    }
+
+    private ModalityView() {
     }
 
     public static ModalityInfoData getModlatityInfos(Modality mod) {
         ModalityInfoData mdata = MODALITY_VIEW_MAP.get(mod);
         if (mdata == null) {
-            mdata = MODALITY_VIEW_MAP.get(Modality.Default);
+            mdata = MODALITY_VIEW_MAP.get(Modality.DEFAULT);
         }
         if (mdata == null) {
             mdata = DEFAULT_MODALITY_VIEW;
         }
         return mdata;
+    }
+
+    public static Set<Entry<Modality, ModalityInfoData>> getModalityViewEntries() {
+        return MODALITY_VIEW_MAP.entrySet();
     }
 
     private static Modality getModdality(String name) {
@@ -143,20 +152,16 @@ public class ModalityView {
 
     private static void readTagDisplayByModality() {
         XMLStreamReader xmler = null;
-        InputStream stream = null;
         try {
-            File file = ResourceUtil.getResource("attributes-view.xml");
+            File file = ResourceUtil.getResource("attributes-view.xml"); //$NON-NLS-1$
             if (!file.canRead()) {
                 return;
             }
             XMLInputFactory xmlif = XMLInputFactory.newInstance();
-            stream = new FileInputStream(file); // $NON-NLS-1$
-            xmler = xmlif.createXMLStreamReader(stream);
+            xmler = xmlif.createXMLStreamReader(new FileInputStream(file));
 
-            int eventType;
             while (xmler.hasNext()) {
-                eventType = xmler.next();
-                switch (eventType) {
+                switch (xmler.next()) {
                     case XMLStreamConstants.START_ELEMENT:
                         String key = xmler.getName().getLocalPart();
                         if ("modalities".equals(key)) { //$NON-NLS-1$
@@ -173,14 +178,12 @@ public class ModalityView {
             LOGGER.error("Cannot read attributes-view.xml! ", e); //$NON-NLS-1$
         } finally {
             FileUtil.safeClose(xmler);
-            FileUtil.safeClose(stream);
         }
     }
 
     private static void readModalities(XMLStreamReader xmler) throws XMLStreamException {
         while (xmler.hasNext()) {
-            int eventType = xmler.next();
-            switch (eventType) {
+            switch (xmler.next()) {
                 case XMLStreamConstants.START_ELEMENT:
                     String key = xmler.getName().getLocalPart();
                     if ("modality".equals(key) && xmler.getAttributeCount() >= 1) { //$NON-NLS-1$
@@ -206,11 +209,9 @@ public class ModalityView {
     }
 
     private static void readModality(ModalityInfoData data, XMLStreamReader xmler) throws XMLStreamException {
-        int eventType;
         boolean state = true;
         while (xmler.hasNext() && state) {
-            eventType = xmler.next();
-            switch (eventType) {
+            switch (xmler.next()) {
                 case XMLStreamConstants.START_ELEMENT:
                     if ("corner".equals(xmler.getName().getLocalPart()) && xmler.getAttributeCount() >= 1) { //$NON-NLS-1$
                         String name = xmler.getAttributeValue(null, "name");//$NON-NLS-1$
@@ -236,13 +237,11 @@ public class ModalityView {
 
         TagView[] disElements = data.getCornerInfo(corner).getInfos();
 
-        int eventType;
         boolean state = true;
         int index = -1;
         String format = null;
         while (xmler.hasNext() && state) {
-            eventType = xmler.next();
-            switch (eventType) {
+            switch (xmler.next()) {
                 case XMLStreamConstants.CHARACTERS:
                     if (index > 0 && index <= 7) {
                         disElements[index - 1] = getTag(xmler.getText(), format);

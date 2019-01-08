@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.task;
 
 import java.awt.Color;
@@ -24,6 +24,7 @@ import org.weasis.core.api.gui.util.ImageSectionIcon;
 import org.weasis.core.api.util.FontTools;
 import org.weasis.core.api.util.LocalUtil;
 
+@SuppressWarnings("serial")
 public class CircularProgressBar extends JProgressBar {
     private static final Color BACK_COLOR = new Color(82, 152, 219);
     public static final ImageIcon ICON =
@@ -96,15 +97,13 @@ public class CircularProgressBar extends JProgressBar {
 
     @Override
     public synchronized void setIndeterminate(boolean newValue) {
+        if (animateThread != null) {
+            stopIndeterminate();
+        }
         if (newValue != this.isIndeterminate()) {
-            if (animateThread != null) {
-                stopIndeterminate();
-            }
-            if (newValue) {
-                if (animateThread == null) {
-                    animateThread = new Animate(50);
-                    animateThread.start();
-                }
+            if (newValue && animateThread == null) {
+                animateThread = new Animate(50);
+                animateThread.start();
             }
             super.setIndeterminate(newValue);
         }
@@ -115,13 +114,6 @@ public class CircularProgressBar extends JProgressBar {
         animateThread = null;
         if (moribund != null) {
             moribund.interrupt();
-        }
-    }
-
-    @Override
-    protected void finalize() throws Throwable {
-        if (animateThread != null) {
-            animateThread.interrupt();
         }
     }
 

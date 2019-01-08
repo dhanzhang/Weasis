@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.explorer.pref.node;
 
 import java.awt.BorderLayout;
@@ -75,7 +85,7 @@ public class DicomWebNodeDialog extends JDialog {
         gbcDescriptionLabel.gridy = 0;
         content.add(descriptionLabel, gbcDescriptionLabel);
 
-        descriptionLabel.setText(Messages.getString("PrinterDialog.desc") + StringUtil.COLON);
+        descriptionLabel.setText(Messages.getString("PrinterDialog.desc") + StringUtil.COLON); //$NON-NLS-1$
         descriptionTf = new JTextField();
         GridBagConstraints gbcDescriptionTf = new GridBagConstraints();
         gbcDescriptionTf.anchor = GridBagConstraints.LINE_START;
@@ -102,7 +112,7 @@ public class DicomWebNodeDialog extends JDialog {
         content.add(comboBox, gbcComboBox);
 
         urlLabel = new JLabel();
-        urlLabel.setText("URL" + StringUtil.COLON);
+        urlLabel.setText("URL" + StringUtil.COLON); //$NON-NLS-1$
         GridBagConstraints gbcAeTitleLabel = new GridBagConstraints();
         gbcAeTitleLabel.anchor = GridBagConstraints.SOUTHEAST;
         gbcAeTitleLabel.insets = new Insets(0, 0, 5, 5);
@@ -158,8 +168,8 @@ public class DicomWebNodeDialog extends JDialog {
         try {
             validUrl = new URL(url);
         } catch (MalformedURLException e) {
-            LOGGER.warn("Non valid url", e);
-            JOptionPane.showMessageDialog(this, "This URL is not valid", Messages.getString("PrinterDialog.error"), //$NON-NLS-2$
+            LOGGER.warn("Non valid url", e); //$NON-NLS-1$
+            JOptionPane.showMessageDialog(this, "This URL is not valid", Messages.getString("PrinterDialog.error"), //$NON-NLS-1$//$NON-NLS-2$
                 JOptionPane.ERROR_MESSAGE);
             return;
         }

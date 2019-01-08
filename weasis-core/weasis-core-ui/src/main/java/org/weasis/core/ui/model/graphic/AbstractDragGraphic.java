@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic;
 
 import java.awt.Graphics2D;
@@ -53,7 +63,7 @@ public abstract class AbstractDragGraphic extends AbstractGraphic implements Dra
 
     @Override
     public Boolean getResizingOrMoving() {
-        return Optional.ofNullable(resizingOrMoving).orElse(Boolean.FALSE) ;
+        return Optional.ofNullable(resizingOrMoving).orElse(Boolean.FALSE);
     }
 
     @Override
@@ -117,11 +127,6 @@ public abstract class AbstractDragGraphic extends AbstractGraphic implements Dra
     }
 
     @Override
-    public final Boolean isLastPointValid() {
-        return super.isLastPointValid();
-    }
-
-    @Override
     public Draggable createMoveDrag() {
         return new DefaultDragSequence(this);
     }
@@ -145,8 +150,7 @@ public abstract class AbstractDragGraphic extends AbstractGraphic implements Dra
     public Integer moveAndResizeOnDrawing(Integer handlePointIndex, Double deltaX, Double deltaY,
         MouseEventDouble mouseEvent) {
         if (Objects.equals(handlePointIndex, UNDEFINED)) {
-            pts.stream().filter(Objects::nonNull)
-                .forEach(p -> p.setLocation(p.getX() + deltaX, p.getY() + deltaY));
+            pts.stream().filter(Objects::nonNull).forEach(p -> p.setLocation(p.getX() + deltaX, p.getY() + deltaY));
         } else if (handlePointIndex >= 0 && handlePointIndex < pts.size()) {
             Point2D point = pts.get(handlePointIndex);
             Optional.ofNullable(point).ifPresent(p -> p.setLocation(mouseEvent.getImageCoordinates()));

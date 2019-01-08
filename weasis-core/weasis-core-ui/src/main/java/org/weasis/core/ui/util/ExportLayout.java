@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.weasis.core.ui.util;
 
@@ -38,9 +38,9 @@ public class ExportLayout<E extends ImageElement> extends JPanel {
         adaptLayoutModel(layoutModel);
     }
 
-    public ExportLayout(ViewCanvas<E> IViewCanvas) {
+    public ExportLayout(ViewCanvas<E> viewCanvas) {
         initGrid();
-        adaptLayoutModel(IViewCanvas);
+        adaptLayoutModel(viewCanvas);
 
     }
 
@@ -62,13 +62,13 @@ public class ExportLayout<E extends ImageElement> extends JPanel {
         return layoutModel;
     }
 
-    private void adaptLayoutModel(ViewCanvas<E> IViewCanvas) {
+    private void adaptLayoutModel(ViewCanvas<E> viewCanvas) {
         final Map<LayoutConstraints, Component> map = new LinkedHashMap<>(1);
-        this.layoutModel = new GridBagLayoutModel(map, "exp_tmp", "", null);
+        this.layoutModel = new GridBagLayoutModel(map, "exp_tmp", ""); //$NON-NLS-1$ //$NON-NLS-2$
 
-        ExportImage<E> export = new ExportImage<>(IViewCanvas);
+        ExportImage<E> export = new ExportImage<>(viewCanvas);
         export.getInfoLayer().setBorder(3);
-        LayoutConstraints e = new LayoutConstraints(IViewCanvas.getClass().getName(), 0, 0, 0, 1, 1, 1.0, 1.0,
+        LayoutConstraints e = new LayoutConstraints(viewCanvas.getClass().getName(), 0, 0, 0, 1, 1, 1.0, 1.0,
             GridBagConstraints.CENTER, GridBagConstraints.BOTH);
         map.put(e, export);
         grid.add(export, e);
@@ -78,7 +78,7 @@ public class ExportLayout<E extends ImageElement> extends JPanel {
     private void adaptLayoutModel(GridBagLayoutModel layoutModel) {
         final Map<LayoutConstraints, Component> oldMap = layoutModel.getConstraints();
         final Map<LayoutConstraints, Component> map = new LinkedHashMap<>(oldMap.size());
-        this.layoutModel = new GridBagLayoutModel(map, "exp_tmp", "", null);
+        this.layoutModel = new GridBagLayoutModel(map, "exp_tmp", ""); //$NON-NLS-1$ //$NON-NLS-2$
         Iterator<LayoutConstraints> enumVal = oldMap.keySet().iterator();
 
         while (enumVal.hasNext()) {
@@ -87,7 +87,7 @@ public class ExportLayout<E extends ImageElement> extends JPanel {
             LayoutConstraints constraint = e.copy();
 
             if (v instanceof ViewCanvas) {
-                ExportImage<E> export = new ExportImage<>((ViewCanvas<E>)v);
+                ExportImage<?> export = new ExportImage<>((ViewCanvas) v);
                 export.getInfoLayer().setBorder(3);
                 map.put(constraint, export);
                 v = export;

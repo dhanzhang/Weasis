@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.editor;
 
 import java.io.File;
@@ -30,14 +30,15 @@ import org.weasis.core.api.media.data.Series;
 import org.weasis.core.api.media.data.SeriesEvent;
 import org.weasis.core.api.media.data.TagView;
 import org.weasis.core.api.media.data.TagW;
+import org.weasis.opencv.data.PlanarImage;
 
-public class DefaultMimeIO<F extends File> implements MediaReader<F> {
+public class DefaultMimeIO implements MediaReader {
 
     private static final TagView defaultTagView = new TagView(TagW.FileName);
 
     protected URI uri;
     protected final String mimeType;
-    private MediaElement<F> mediaElement = null;
+    private MediaElement mediaElement = null;
     private final FileCache fileCache;
 
     public DefaultMimeIO(URI media, String mimeType) {
@@ -47,10 +48,7 @@ public class DefaultMimeIO<F extends File> implements MediaReader<F> {
     }
 
     @Override
-    public F getMediaFragment(MediaElement<F> media) throws Exception {
-        if (media != null) {
-            return (F) media.getFile();
-        }
+    public PlanarImage getImageFragment(MediaElement media) throws Exception {
         return null;
     }
 
@@ -61,11 +59,11 @@ public class DefaultMimeIO<F extends File> implements MediaReader<F> {
 
     @Override
     public void reset() {
-
+        // Do nothing
     }
 
     @Override
-    public MediaElement<F> getPreview() {
+    public MediaElement getPreview() {
         return getSingleImage();
     }
 
@@ -75,8 +73,8 @@ public class DefaultMimeIO<F extends File> implements MediaReader<F> {
     }
 
     @Override
-    public MediaElement<?>[] getMediaElement() {
-        MediaElement<?> element = getSingleImage();
+    public MediaElement[] getMediaElement() {
+        MediaElement element = getSingleImage();
         if (element != null) {
             return new MediaElement[] { element };
         }
@@ -84,29 +82,32 @@ public class DefaultMimeIO<F extends File> implements MediaReader<F> {
     }
 
     @Override
-    public MediaSeries<MediaElement<F>> getMediaSeries() {
+    public MediaSeries<MediaElement> getMediaSeries() {
 
-        MediaSeries<MediaElement<F>> mediaSeries =
-            new Series<MediaElement<F>>(TagW.FilePath, this.toString(), defaultTagView, 1) {
+        MediaSeries<MediaElement> mediaSeries =
+            new Series<MediaElement>(TagW.FilePath, this.toString(), defaultTagView, 1) {
 
                 @Override
                 public String getMimeType() {
-                    synchronized (this) {
-                        for (MediaElement<?> m : medias) {
-                            return m.getMimeType();
+                    if (!medias.isEmpty()) {
+                        synchronized (this) {
+                            MediaElement img = medias.get(0);
+                            if (img != null) {
+                                return img.getMimeType();
+                            }
                         }
                     }
                     return null;
                 }
 
                 @Override
-                public <T extends MediaElement<?>> void addMedia(T media) {
+                public void addMedia(MediaElement media) {
                     if (media != null) {
-                        this.add((MediaElement<F>) media);
-                        DataExplorerModel model = (DataExplorerModel) getTagValue(TagW.ExplorerModel);
+                        this.add(media);
+                        DataExplorerModel model = (DataExplorerModel) this.getTagValue(TagW.ExplorerModel);
                         if (model != null) {
-                            model.firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.Add, model, null,
-                                new SeriesEvent(SeriesEvent.Action.AddImage, this, media)));
+                            model.firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.ADD, model, null,
+                                new SeriesEvent(SeriesEvent.Action.ADD_IMAGE, this, media)));
                         }
                     }
                 }
@@ -118,18 +119,12 @@ public class DefaultMimeIO<F extends File> implements MediaReader<F> {
 
     @Override
     public int getMediaElementNumber() {
-        // TODO Auto-generated method stub
-        return 0;
+        return 1;
     }
 
-    private MediaElement<F> getSingleImage() {
+    private MediaElement getSingleImage() {
         if (mediaElement == null) {
-            mediaElement = new MediaElement<F>(this, null) {
-                @Override
-                public void dispose() {
-                    // TODO Auto-generated method stub
-                }
-            };
+            mediaElement = new MediaElement(this, null);
         }
         return mediaElement;
     }
@@ -146,6 +141,7 @@ public class DefaultMimeIO<F extends File> implements MediaReader<F> {
 
     @Override
     public void close() {
+        // Do nothing
     }
 
     @Override

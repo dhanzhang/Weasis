@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
- *     Nicolas Roduit, Marcelo Porto  - initial API and implementation
- ******************************************************************************/
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.util;
 
 import org.slf4j.Logger;
@@ -45,7 +45,7 @@ public class PrintOptions {
                 try {
                     return DotPerInches.valueOf(val);
                 } catch (Exception e) {
-                    LOGGER.error("Cannot find DotPerInches: {}", val, e);
+                    LOGGER.error("Cannot find DotPerInches: {}", val, e); //$NON-NLS-1$
                 }
             }
             return defaultValue;

@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.base.explorer;
 
 import java.io.File;
@@ -12,7 +22,7 @@ import org.weasis.core.api.media.data.MediaElement;
 
 public final class JIUtility {
 
-    private static final File USER_HOME = new File(System.getProperty("user.home"));
+    private static final File USER_HOME = new File(System.getProperty("user.home")); //$NON-NLS-1$
     public static final String ROOT_FOLDER;
 
     static {
@@ -45,7 +55,7 @@ public final class JIUtility {
     }
 
     public static Icon getSystemIcon(final MediaElement dObj) {
-        return getSystemIcon(dObj.getFileCache().getOriginalFile().get());
+        return getSystemIcon(dObj.getFileCache().getOriginalFile().orElse(null));
     }
 
     public static Icon getSystemIcon(final File f) {

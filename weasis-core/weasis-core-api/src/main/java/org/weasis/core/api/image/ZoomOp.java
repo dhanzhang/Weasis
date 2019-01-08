@@ -1,35 +1,30 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.image;
 
-import java.awt.image.RenderedImage;
-import java.awt.image.renderable.ParameterBlock;
+import java.awt.Dimension;
 
-import javax.media.jai.Interpolation;
-import javax.media.jai.JAI;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.opencv.imgproc.Imgproc;
 import org.weasis.core.api.Messages;
 import org.weasis.core.api.gui.util.MathUtil;
-import org.weasis.core.api.image.util.ImageToolkit;
+import org.weasis.opencv.data.PlanarImage;
+import org.weasis.opencv.op.ImageProcessor;
 
 public class ZoomOp extends AbstractOp {
-    private static final Logger LOGGER = LoggerFactory.getLogger(ZoomOp.class);
 
     public static final String OP_NAME = Messages.getString("ZoomOperation.title"); //$NON-NLS-1$
 
     public static final String[] INTERPOLATIONS =
         { Messages.getString("ZoomOperation.nearest"), Messages.getString("ZoomOperation.bilinear"), //$NON-NLS-1$ //$NON-NLS-2$
-            Messages.getString("ZoomOperation.bicubic"), Messages.getString("ZoomOperation.bicubic2") }; //$NON-NLS-1$ //$NON-NLS-2$
+            Messages.getString("ZoomOperation.bicubic"), Messages.getString("ZoomOperation.lanczos") }; //$NON-NLS-1$ //$NON-NLS-2$
 
     /**
      * Set a zoom factor in x-axis (Required parameter).
@@ -67,33 +62,25 @@ public class ZoomOp extends AbstractOp {
 
     @Override
     public void process() throws Exception {
-        RenderedImage source = (RenderedImage) params.get(Param.INPUT_IMG);
-        RenderedImage result = source;
+        PlanarImage source = (PlanarImage) params.get(Param.INPUT_IMG);
+        PlanarImage result = source;
         Double zoomFactorX = (Double) params.get(P_RATIO_X);
         Double zoomFactorY = (Double) params.get(P_RATIO_Y);
 
-        if (zoomFactorX == null || zoomFactorY == null) {
-            LOGGER.warn("Cannot apply \"{}\" because a parameter is null", OP_NAME); //$NON-NLS-1$
-        } else if (MathUtil.isDifferent(zoomFactorX, 1.0) || MathUtil.isDifferent(zoomFactorY, 1.0)) {
-            ParameterBlock pb = new ParameterBlock();
-            pb.addSource(source);
-            pb.add(Math.abs(zoomFactorX.floatValue()));
-            pb.add(Math.abs(zoomFactorY.floatValue()));
-            pb.add(0.0f);
-            pb.add(0.0f);
-            pb.add(getInterpolation());
-
-            result = JAI.create("scale", pb, ImageToolkit.NOCACHE_HINT); //$NON-NLS-1$
+        if (zoomFactorX != null && zoomFactorY != null
+            && (MathUtil.isDifferent(zoomFactorX, 1.0) || MathUtil.isDifferent(zoomFactorY, 1.0))) {
+            Dimension dim = new Dimension((int) (Math.abs(zoomFactorX) * source.width()),
+                (int) (Math.abs(zoomFactorY) * source.height()));
+            Integer interpolation = (Integer) params.get(P_INTERPOLATION);
+            if (Math.abs(zoomFactorX) < 0.1) {
+                interpolation = Imgproc.INTER_AREA;
+            } else if (interpolation != null && interpolation == 3) {
+                interpolation = 4;
+            }
+            result = ImageProcessor.scale(source.toMat(), dim, interpolation);
         }
 
         params.put(Param.OUTPUT_IMG, result);
     }
 
-    public Interpolation getInterpolation() {
-        Integer interpolation = (Integer) params.get(P_INTERPOLATION);
-        if (interpolation == null || interpolation < 0 || interpolation > 3) {
-            interpolation = 1;
-        }
-        return Interpolation.getInstance(interpolation);
-    }
 }

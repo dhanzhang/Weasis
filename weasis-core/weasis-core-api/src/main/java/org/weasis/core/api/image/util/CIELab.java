@@ -1,26 +1,36 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.api.image.util;
 
 import java.awt.color.ColorSpace;
 
 public class CIELab extends ColorSpace {
+    private static final long serialVersionUID = -8341937056180131312L;
 
     private static final ColorSpace CIEXYZ = ColorSpace.getInstance(ColorSpace.CS_CIEXYZ);
     private static final double N = 4.0 / 29.0;
 
-    CIELab() {
+    private CIELab() {
         super(ColorSpace.TYPE_Lab, 3);
     }
 
     private static class Holder {
         static final CIELab INSTANCE = new CIELab();
+
+        private Holder() {
+        }
     }
 
     public static CIELab getInstance() {
         return Holder.INSTANCE;
-    }
-
-    private Object readResolve() {
-        return getInstance();
     }
 
     @Override
@@ -56,10 +66,10 @@ public class CIELab extends ColorSpace {
     @Override
     public float[] toCIEXYZ(float[] colorvalue) {
         double i = (colorvalue[0] + 16.0) * (1.0 / 116.0);
-        double X = fInv(i + colorvalue[1] * (1.0 / 500.0));
-        double Y = fInv(i);
-        double Z = fInv(i - colorvalue[2] * (1.0 / 200.0));
-        return new float[] { (float) X, (float) Y, (float) Z };
+        double x = fInv(i + colorvalue[1] * (1.0 / 500.0));
+        double y = fInv(i);
+        double z = fInv(i - colorvalue[2] * (1.0 / 200.0));
+        return new float[] { (float) x, (float) y, (float) z };
     }
 
     @Override

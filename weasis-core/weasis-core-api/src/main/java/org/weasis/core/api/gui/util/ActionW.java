@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.util;
 
 import java.awt.Cursor;
@@ -23,6 +23,7 @@ import javax.swing.ImageIcon;
 import org.weasis.core.api.Messages;
 
 public class ActionW implements KeyActionValue {
+    public static final String DRAW_CMD_PREFIX = "draw.sub."; //$NON-NLS-1$
 
     public static final ActionW NO_ACTION =
         new ActionW(Messages.getString("ActionW.no"), "none", KeyEvent.VK_N, 0, null); //$NON-NLS-1$ //$NON-NLS-2$
@@ -63,12 +64,24 @@ public class ActionW implements KeyActionValue {
         getCustomCursor("pan.png", Messages.getString("ActionW.pan"), 16, 16)); //$NON-NLS-1$ //$NON-NLS-2$
     public static final ActionW DRAWINGS = new ActionW(Messages.getString("ActionW.draw"), "drawings", 0, 0, null); //$NON-NLS-1$ //$NON-NLS-2$
     public static final ActionW MEASURE =
-        new ActionW(Messages.getString("ActionW.measure"), "measure", KeyEvent.VK_M, 0, null); //$NON-NLS-1$ //$NON-NLS-2$
-    public static final ActionW DRAW = new ActionW("Draw", "draw", KeyEvent.VK_G, 0, null); //$NON-NLS-2$
+        new ActionW(Messages.getString("ActionW.measure"), "measure", KeyEvent.VK_M, 0, null) { //$NON-NLS-1$ //$NON-NLS-2$
+            @Override
+            public boolean isDrawingAction() {
+                return true;
+            }
+        };
+    public static final ActionW DRAW =
+        new ActionW(Messages.getString("ActionW.draws"), "draw", KeyEvent.VK_G, 0, null) { //$NON-NLS-1$//$NON-NLS-2$
+            @Override
+            public boolean isDrawingAction() {
+                return true;
+            }
+        };
+    // Starting cmd by "draw.sub." defines a derivative action
     public static final ActionW DRAW_MEASURE =
-        new ActionW(Messages.getString("ActionW.measurement"), "drawMeasure", 0, 0, null); //$NON-NLS-1$ //$NON-NLS-2$
+        new ActionW(Messages.getString("ActionW.measurement"), DRAW_CMD_PREFIX + MEASURE.cmd(), 0, 0, null); //$NON-NLS-1$
     public static final ActionW DRAW_GRAPHICS =
-                    new ActionW(Messages.getString("ActionW.draw"), "drawGraphics", 0, 0, null);  //$NON-NLS-2$
+        new ActionW(Messages.getString("ActionW.draw"), DRAW_CMD_PREFIX + DRAW.cmd(), 0, 0, null); //$NON-NLS-1$
     public static final ActionW SPATIAL_UNIT =
         new ActionW(Messages.getString("ActionW.spatial_unit"), "spunit", 0, 0, null); //$NON-NLS-1$//$NON-NLS-2$
     public static final ActionW SORTSTACK = new ActionW("", "sortStack", 0, 0, null); //$NON-NLS-1$ //$NON-NLS-2$
@@ -157,6 +170,14 @@ public class ActionW implements KeyActionValue {
     @Override
     public int getModifier() {
         return modifier;
+    }
+
+    public boolean isDrawingAction() {
+        return false;
+    }
+
+    public boolean isGraphicListAction() {
+        return command.startsWith(DRAW_CMD_PREFIX);
     }
 
     public Icon getSmallIcon() {

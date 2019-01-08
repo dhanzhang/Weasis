@@ -1,22 +1,19 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.codec;
 
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-
-import javax.media.jai.PlanarImage;
 
 import org.dcm4che3.data.Tag;
 import org.slf4j.Logger;
@@ -24,12 +21,12 @@ import org.slf4j.LoggerFactory;
 import org.weasis.core.api.explorer.ObservableEvent;
 import org.weasis.core.api.explorer.model.DataExplorerModel;
 import org.weasis.core.api.gui.util.Filter;
-import org.weasis.core.api.media.data.MediaElement;
+import org.weasis.core.api.gui.util.MathUtil;
+import org.weasis.core.api.image.CvUtil;
 import org.weasis.core.api.media.data.Series;
 import org.weasis.core.api.media.data.SeriesEvent;
-import org.weasis.core.api.media.data.TagW;
-import org.weasis.core.api.media.data.TagUtil;
 import org.weasis.core.api.media.data.TagView;
+import org.weasis.core.api.media.data.TagW;
 import org.weasis.core.api.util.FileUtil;
 import org.weasis.core.api.util.StringUtil;
 import org.weasis.dicom.codec.TagD.Level;
@@ -64,30 +61,27 @@ public class DicomSeries extends Series<DicomImageElement> {
     }
 
     @Override
-    public <T extends MediaElement<?>> void addMedia(T media) {
+    public void addMedia(DicomImageElement media) {
         if (media != null && media.getMediaReader() instanceof DcmMediaReader) {
-            if (media instanceof DicomImageElement) {
-                DicomImageElement dcm = (DicomImageElement) media;
-                int insertIndex;
-                synchronized (this) {
-                    // add image or multi-frame sorted by Instance Number (0020,0013) order
-                    int index = Collections.binarySearch(medias, dcm, SortSeriesStack.instanceNumber);
-                    if (index < 0) {
-                        insertIndex = -(index + 1);
-                    } else {
-                        // Should not happen because the instance number must be unique
-                        insertIndex = index + 1;
-                    }
-                    if (insertIndex < 0 || insertIndex > medias.size()) {
-                        insertIndex = medias.size();
-                    }
-                    add(insertIndex, dcm);
+            int insertIndex;
+            synchronized (this) {
+                // add image or multi-frame sorted by Instance Number (0020,0013) order
+                int index = Collections.binarySearch(medias, media, SortSeriesStack.instanceNumber);
+                if (index < 0) {
+                    insertIndex = -(index + 1);
+                } else {
+                    // Should not happen because the instance number must be unique
+                    insertIndex = index + 1;
                 }
-                DataExplorerModel model = (DataExplorerModel) getTagValue(TagW.ExplorerModel);
-                if (model != null) {
-                    model.firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.Add, model, null,
-                        new SeriesEvent(SeriesEvent.Action.AddImage, this, media)));
+                if (insertIndex < 0 || insertIndex > medias.size()) {
+                    insertIndex = medias.size();
                 }
+                add(insertIndex, media);
+            }
+            DataExplorerModel model = (DataExplorerModel) getTagValue(TagW.ExplorerModel);
+            if (model != null) {
+                model.firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.ADD, model, null,
+                    new SeriesEvent(SeriesEvent.Action.ADD_IMAGE, this, media)));
             }
         }
     }
@@ -155,7 +149,7 @@ public class DicomSeries extends Series<DicomImageElement> {
                         bestDiff = diff;
                         nearest = dcm;
                         bestIndex = index;
-                        if (diff == 0.0) {
+                        if (MathUtil.isEqualToZero(diff)) {
                             break;
                         }
                     }
@@ -185,7 +179,7 @@ public class DicomSeries extends Series<DicomImageElement> {
                     if (diff < bestDiff) {
                         bestDiff = diff;
                         bestIndex = index;
-                        if (diff == 0.0) {
+                        if (MathUtil.isEqualToZero(diff)) {
                             break;
                         }
                     }
@@ -250,15 +244,9 @@ public class DicomSeries extends Series<DicomImageElement> {
             this.preloading = preloading;
         }
 
-        private void freeMemory() {
-            System.gc();
-            try {
-                Thread.sleep(50);
-            } catch (InterruptedException ex) {
-            }
-        }
 
-        private long evaluateImageSize(DicomImageElement image) {
+
+        private static long evaluateImageSize(DicomImageElement image) {
             Integer allocated = TagD.getTagValue(image, Tag.BitsAllocated, Integer.class);
             Integer sample = TagD.getTagValue(image, Tag.SamplesPerPixel, Integer.class);
             Integer rows = TagD.getTagValue(image, Tag.Rows, Integer.class);
@@ -275,29 +263,18 @@ public class DicomSeries extends Series<DicomImageElement> {
                 Boolean cache = (Boolean) img.getTagValue(TagW.ImageCache);
                 if (cache == null || !cache) {
                     long start = System.currentTimeMillis();
-                    PlanarImage i = img.getImage();
-                    if (i != null) {
-                        int tymin = i.getMinTileY();
-                        int tymax = i.getMaxTileY();
-                        int txmin = i.getMinTileX();
-                        int txmax = i.getMaxTileX();
-                        for (int tj = tymin; tj <= tymax; tj++) {
-                            for (int ti = txmin; ti <= txmax; ti++) {
-                                try {
-                                    i.getTile(ti, tj);
-                                } catch (OutOfMemoryError e) {
-                                    LOGGER.error("Out of memory when loading image: {}", img); //$NON-NLS-1$
-                                    freeMemory();
-                                    return;
-                                }
-                            }
-                        }
+                    try {
+                        img.getImage();
+                    } catch (OutOfMemoryError e) {
+                        LOGGER.error("Out of memory when loading image: {}", img, e); //$NON-NLS-1$
+                        CvUtil.runGarbageCollectorAndWait(50);
+                        return;
                     }
                     long stop = System.currentTimeMillis();
-                    LOGGER.debug("Reading time: {} ms of image: {}", (stop - start), img); //$NON-NLS-1$
+                    LOGGER.debug("Reading time: {} ms of image: {}", stop - start, img); //$NON-NLS-1$
                     if (model != null) {
-                        model.firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.Add, model, null,
-                            new SeriesEvent(SeriesEvent.Action.loadImageInMemory, series, img)));
+                        model.firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.ADD, model, null,
+                            new SeriesEvent(SeriesEvent.Action.PRELOADING, series, img)));
                     }
                 }
             }
@@ -311,12 +288,13 @@ public class DicomSeries extends Series<DicomImageElement> {
                 if (model == null || index < 0 || index >= size) {
                     return;
                 }
+                // TODO need to be changed with openCV
                 long imgSize = evaluateImageSize(imageList.get(index)) * size + 5000;
                 long heapSize = Runtime.getRuntime().totalMemory();
                 long heapFreeSize = Runtime.getRuntime().freeMemory();
                 if (imgSize > heapSize / 3) {
                     if (imgSize > heapFreeSize) {
-                        freeMemory();
+                        CvUtil.runGarbageCollectorAndWait(50);
                     }
                     double val = (double) heapFreeSize / imgSize;
                     int ajustSize = (int) (size * val) / 2;
@@ -333,7 +311,7 @@ public class DicomSeries extends Series<DicomImageElement> {
                     }
                 } else {
                     if (imgSize > heapFreeSize) {
-                        freeMemory();
+                        CvUtil.runGarbageCollectorAndWait(50);
                     }
                     for (DicomImageElement img : imageList) {
                         loadArrays(img, model);

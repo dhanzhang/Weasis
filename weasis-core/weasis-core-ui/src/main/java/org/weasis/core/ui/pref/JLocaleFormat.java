@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.pref;
 
 import java.awt.event.ItemEvent;
@@ -18,10 +18,11 @@ import java.util.Locale;
 
 import javax.swing.JComboBox;
 
+import org.weasis.core.api.service.BundleTools;
 import org.weasis.core.api.util.LocalUtil;
 
 @SuppressWarnings("serial")
-public class JLocaleFormat extends JComboBox<JLocale> implements ItemListener {
+public class JLocaleFormat extends JComboBox<JLocale> implements ItemListener, Refreshable {
 
     public JLocaleFormat() {
         super();
@@ -71,14 +72,21 @@ public class JLocaleFormat extends JComboBox<JLocale> implements ItemListener {
         if (e.getStateChange() == ItemEvent.SELECTED) {
             Object item = e.getItem();
             if (item instanceof JLocale) {
-                Locale locale = ((JLocale) item).getLocale();
-                LocalUtil.setLocaleFormat(locale.equals(Locale.getDefault()) ? null : locale);
+                setLocalUtil(((JLocale) item).getLocale());
                 valueHasChanged();
             }
         }
     }
 
-    protected void valueHasChanged() {
+    private void setLocalUtil(Locale local) {
+        if (local == null) {
+            BundleTools.SYSTEM_PREFERENCES.remove(BundleTools.P_FORMAT_CODE);
+        } else {
+            BundleTools.SYSTEM_PREFERENCES.put(BundleTools.P_FORMAT_CODE, LocalUtil.localeToText(local));
+        }
+
+        Locale l = local == null ? null : local.equals(Locale.getDefault()) ? null : local;
+        LocalUtil.setLocaleFormat(l);
     }
 
     public void refresh() {

@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.util;
 
 import java.awt.Component;
@@ -16,8 +26,8 @@ import javax.swing.border.EmptyBorder;
  *
  * The area of title allows to release the click without hiding the popup.
  *
- * @version $Rev$ $Date$
  */
+@SuppressWarnings("serial")
 public class TitleMenuItem extends JLabel implements MenuElement {
 
     public TitleMenuItem(String title, Insets insets) {
@@ -32,15 +42,18 @@ public class TitleMenuItem extends JLabel implements MenuElement {
     }
 
     @Override
-    public void processMouseEvent(MouseEvent e, MenuElement path[], MenuSelectionManager manager) {
+    public void processMouseEvent(MouseEvent e, MenuElement[] path, MenuSelectionManager manager) {
+        // Do nothing
     }
 
     @Override
-    public void processKeyEvent(KeyEvent e, MenuElement path[], MenuSelectionManager manager) {
+    public void processKeyEvent(KeyEvent e, MenuElement[] path, MenuSelectionManager manager) {
+        // Do nothing
     }
 
     @Override
     public void menuSelectionChanged(boolean isIncluded) {
+        // Do nothing
     }
 
     @Override

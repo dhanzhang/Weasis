@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.explorer.gui.central.tumbnail;
 
 import java.awt.datatransfer.DataFlavor;
@@ -6,6 +16,7 @@ import java.awt.datatransfer.UnsupportedFlavorException;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 
 import javax.swing.JComponent;
 import javax.swing.TransferHandler;
@@ -15,9 +26,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.acquire.explorer.AcquireImageInfo;
 import org.weasis.acquire.explorer.AcquireManager;
-import org.weasis.acquire.explorer.core.bean.Serie;
+import org.weasis.acquire.explorer.core.bean.SeriesGroup;
 import org.weasis.acquire.explorer.gui.central.AcquireTabPanel;
-import org.weasis.acquire.explorer.gui.central.component.SerieButton;
+import org.weasis.base.explorer.JIThumbnailCache;
 import org.weasis.base.explorer.list.AThumbnailListPane;
 import org.weasis.base.explorer.list.IThumbnailModel;
 import org.weasis.core.api.media.data.ImageElement;
@@ -27,13 +38,13 @@ import org.weasis.core.api.media.data.Series;
 import org.weasis.core.ui.editor.ViewerPluginBuilder;
 import org.weasis.core.ui.util.UriListFlavor;
 
-public class AcquireCentralTumbnailPane<E extends MediaElement<?>> extends AThumbnailListPane<E> {
+public class AcquireCentralTumbnailPane<E extends MediaElement> extends AThumbnailListPane<E> {
     private static final long serialVersionUID = 5728507793866004078L;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AcquireCentralTumbnailPane.class);
 
-    public AcquireCentralTumbnailPane(List<E> list) {
-        super(new AcquireCentralThumnailList<E>());
+    public AcquireCentralTumbnailPane(List<E> list, JIThumbnailCache thumbCache) {
+        super(new AcquireCentralThumnailList<E>(thumbCache));
         setList(list);
         setTransferHandler(new SequenceHandler());
     }
@@ -46,10 +57,28 @@ public class AcquireCentralTumbnailPane<E extends MediaElement<?>> extends AThum
         this.thumbnailList.addListSelectionListener(listener);
     }
 
+    public void addElements(List<E> elements) {
+        if (elements != null) {
+            IThumbnailModel<E> model = this.thumbnailList.getThumbnailListModel();
+            elements.forEach(model::addElement);
+            repaintList();
+        }
+    }
+
     public void setList(List<E> elements) {
         IThumbnailModel<E> model = this.thumbnailList.getThumbnailListModel();
         model.clear();
-        elements.forEach(model::addElement);
+        if (elements != null) {
+            elements.forEach(model::addElement);
+            repaintList();
+        }
+    }
+
+    public void repaintList() {
+        // Require to repaint the scroll pane correctly (otherwise not all the elements of JList are repainted)
+        if (thumbnailList.asComponent() instanceof JComponent) {
+            ((JComponent) thumbnailList.asComponent()).updateUI();
+        }
     }
 
     private class SequenceHandler extends TransferHandler {
@@ -69,15 +98,17 @@ public class AcquireCentralTumbnailPane<E extends MediaElement<?>> extends AThum
             if (!support.isDrop()) {
                 return false;
             }
+            if (AcquireManager.getInstance().getAcquireExplorer().getImportPanel().isLoading()) {
+                return false;
+            }
             if (support.isDataFlavorSupported(Series.sequenceDataFlavor)
                 || support.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
-                || support.isDataFlavorSupported(UriListFlavor.uriListFlavor)) {
+                || support.isDataFlavorSupported(UriListFlavor.flavor)) {
                 return true;
             }
             return false;
         }
 
-        @SuppressWarnings({ "unchecked", "rawtypes" })
         @Override
         public boolean importData(TransferSupport support) {
             if (!canImport(support)) {
@@ -92,20 +123,20 @@ public class AcquireCentralTumbnailPane<E extends MediaElement<?>> extends AThum
                 try {
                     files = (List<File>) transferable.getTransferData(DataFlavor.javaFileListFlavor);
                 } catch (Exception e) {
-                    LOGGER.error("Drop image file", e);
+                    LOGGER.error("Drop image file", e); //$NON-NLS-1$
                 }
                 return dropDFiles(files);
             }
             // When dragging a file or group of files from a Gnome or Kde environment
             // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=4899516
-            else if (support.isDataFlavorSupported(UriListFlavor.uriListFlavor)) {
+            else if (support.isDataFlavorSupported(UriListFlavor.flavor)) {
                 try {
                     // Files with spaces in the filename trigger an error
                     // http://bugs.sun.com/bugdatabase/view_bug.do?bug_id=6936006
-                    String val = (String) transferable.getTransferData(UriListFlavor.uriListFlavor);
+                    String val = (String) transferable.getTransferData(UriListFlavor.flavor);
                     files = UriListFlavor.textURIListToFileList(val);
                 } catch (Exception e) {
-                    LOGGER.error("Drop image URI", e);
+                    LOGGER.error("Drop image URI", e); //$NON-NLS-1$
                 }
                 return dropDFiles(files);
             }
@@ -118,33 +149,30 @@ public class AcquireCentralTumbnailPane<E extends MediaElement<?>> extends AThum
                     addToSerie(media);
                 }
             } catch (UnsupportedFlavorException | IOException e) {
-                LOGGER.error("Drop thumnail", e);
+                LOGGER.error("Drop thumnail", e); //$NON-NLS-1$
             }
 
             return true;
         }
 
-        @SuppressWarnings("rawtypes")
         private void addToSerie(MediaElement media) {
             if (media instanceof ImageElement) {
-                AcquireCentralThumnailList tumbList = (AcquireCentralThumnailList) AcquireCentralTumbnailPane.this.thumbnailList;
+                AcquireCentralThumnailList tumbList =
+                    (AcquireCentralThumnailList) AcquireCentralTumbnailPane.this.thumbnailList;
                 AcquireImageInfo info = AcquireManager.findByImage((ImageElement) media);
-                SerieButton btn = tumbList.getSelectedSerie();
-                if (btn != null) {
-                    info.setSerie(btn.getSerie());
-                } else {
-                    info.setSerie(Serie.DEFAULT_SERIE);
+                if (info != null) {
+                    SeriesGroup seriesGroup =
+                        Optional.ofNullable(tumbList.getSelectedSerie()).map(b -> b.getSerie()).orElse(null);
+                    AcquireManager.importImage(info, seriesGroup, 0);
                 }
-                tumbList.updateAll();
             }
         }
 
-        @SuppressWarnings("rawtypes")
         private boolean dropDFiles(List<File> files) {
             if (files != null) {
                 for (File file : files) {
                     MediaReader reader = ViewerPluginBuilder.getMedia(file, false);
-                    if (reader != null) {
+                    if (reader != null && !reader.getMediaFragmentMimeType().contains("dicom")) { //$NON-NLS-1$
                         MediaElement[] medias = reader.getMediaElement();
                         if (medias != null) {
                             for (MediaElement mediaElement : medias) {

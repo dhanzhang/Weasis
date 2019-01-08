@@ -1,19 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.media.data;
 
-import java.util.Comparator;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map.Entry;
+import java.util.Objects;
 
 import org.weasis.core.api.Messages;
 
@@ -23,17 +25,13 @@ public class MediaSeriesGroupNode implements MediaSeriesGroup {
 
     private final TagW tagID;
     private final TagView displayTag;
-    private final HashMap<TagW, Object> tags;
-    private Comparator<TagW> comparator;
+    private final HashMap<TagW, Object> tags = new HashMap<>();
+    private final List<Object> oldIds = new ArrayList<>();
 
     public MediaSeriesGroupNode(TagW tagID, Object identifier, TagView displayTag) {
-        if (tagID == null || identifier == null) {
-            throw new IllegalArgumentException("tagID or identifier cannot be null"); //$NON-NLS-1$
-        }
+        this.tagID = Objects.requireNonNull(tagID);
+        tags.put(tagID, Objects.requireNonNull(identifier));
         this.displayTag = displayTag == null ? new TagView(tagID) : displayTag;
-        this.tags = new HashMap<>();
-        this.tagID = tagID;
-        tags.put(tagID, identifier);
     }
 
     @Override
@@ -47,38 +45,55 @@ public class MediaSeriesGroupNode implements MediaSeriesGroup {
     }
 
     @Override
-    public String toString() {
-        String val = displayTag.getFormattedText(false, this);
-        return val == null ? Messages.getString("MediaSeriesGroupNode.no_val"): val; //$NON-NLS-1$
+    public void addMergeIdValue(Object valueID) {
+        if (!oldIds.contains(valueID)) {
+            oldIds.add(valueID);
+        }
     }
 
     @Override
-    public boolean equals(Object obj) {
-        Object value1 = tags.get(tagID);
-        if (value1 == obj) {
+    public boolean matchIdValue(Object valueID) {
+        Object v = tags.get(tagID);
+
+        if (Objects.equals(v, valueID)) {
             return true;
         }
-        if (value1 == null) {
-            return false;
+        for (Object id : oldIds) {
+            if (Objects.equals(id, valueID)) {
+                return true;
+            }
         }
-        if (obj instanceof MediaSeriesGroupNode) {
-            Object value2 = ((MediaSeriesGroupNode) obj).tags.get(tagID);
-            return value1.equals(value2);
-        }
-        return value1.equals(obj);
+        return false;
+    }
+
+    @Override
+    public String toString() {
+        String val = displayTag.getFormattedText(false, this);
+        return val == null ? Messages.getString("MediaSeriesGroupNode.no_val") : val; //$NON-NLS-1$
     }
 
     @Override
     public int hashCode() {
+        final int prime = 31;
+        int result = 1;
         Object val = tags.get(tagID);
-        if (val instanceof Integer) {
-            return (Integer) val;
+        result = prime * result + ((val == null) ? tags.hashCode() : val.hashCode());
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
         }
-        // Should never happens, but it does very rarely ?
-        if (val == null) {
-            return tags.hashCode();
+        if (obj == null) {
+            return false;
         }
-        return val.hashCode();
+        if (!(obj instanceof MediaSeriesGroup)) {
+            return false;
+        }
+        // According to the implementation of MediaSeriesGroupNode, the identifier cannot be null
+        return Objects.equals(tags.get(tagID), ((MediaSeriesGroup) obj).getTagValue(tagID));
     }
 
     @Override
@@ -126,18 +141,6 @@ public class MediaSeriesGroupNode implements MediaSeriesGroup {
     @Override
     public void dispose() {
         // Nothing to dispose
-    }
-
-    // can be null
-    @Override
-    public Comparator<TagW> getComparator() {
-        return comparator;
-    }
-
-    @Override
-    public void setComparator(Comparator<TagW> comparator) {
-        this.comparator = comparator;
-
     }
 
 }

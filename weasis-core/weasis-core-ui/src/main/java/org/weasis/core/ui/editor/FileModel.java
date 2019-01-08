@@ -1,8 +1,18 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.editor;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.HttpURLConnection;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.List;
 
@@ -14,64 +24,60 @@ import org.weasis.core.api.explorer.ObservableEvent;
 import org.weasis.core.api.explorer.model.AbstractFileModel;
 import org.weasis.core.api.gui.util.AppProperties;
 import org.weasis.core.api.gui.util.GuiExecutor;
+import org.weasis.core.api.service.BundleTools;
 import org.weasis.core.api.util.FileUtil;
+import org.weasis.core.api.util.NetworkUtil;
 
+// TODO required to change the static ref
+//@org.osgi.service.component.annotations.Component(immediate = false, property = {
+//    CommandProcessor.COMMAND_SCOPE + "=image", CommandProcessor.COMMAND_FUNCTION + "=get",
+//    CommandProcessor.COMMAND_FUNCTION + "=close" }, service = FileModel.class)
 public class FileModel extends AbstractFileModel {
     private static final Logger LOGGER = LoggerFactory.getLogger(FileModel.class);
 
     public static final File IMAGE_CACHE_DIR =
         AppProperties.buildAccessibleTempDirectory(AppProperties.FILE_CACHE_DIR.getName(), "image"); //$NON-NLS-1$
 
-    public File getFile(String path) {
+    private File getFile(String url) {
         File outFile = null;
         try {
-            URL url = new URL(path);
-
-            HttpURLConnection httpCon = (HttpURLConnection) url.openConnection();
-            httpCon.setRequestMethod("GET"); //$NON-NLS-1$
-            // Connect to server.
-            httpCon.connect();
-
-            // Make sure response code is in the 200 range.
-            if (httpCon.getResponseCode() / 100 != 2) {
-                return null;
-            }
-
-            outFile = File.createTempFile("tumb_", FileUtil.getExtension(path), IMAGE_CACHE_DIR); // $NON-NLS-2$
-                                                                                                  // //$NON-NLS-3$
+            outFile = File.createTempFile("img_", FileUtil.getExtension(url), IMAGE_CACHE_DIR); // $NON-NLS-2$ //$NON-NLS-1$
             LOGGER.debug("Start to download image {} to {}.", url, outFile.getName()); //$NON-NLS-1$
-            if (FileUtil.writeFile(httpCon, outFile) == 0) {
-                return null;
-            }
+            InputStream httpCon =
+                NetworkUtil.getUrlInputStream(new URL(url).openConnection(), BundleTools.SESSION_TAGS_FILE);
+            FileUtil.writeStreamWithIOException(httpCon, outFile);
         } catch (IOException e) {
-            LOGGER.error("Dowloading image", e);
+            LOGGER.error("Dowloading image", e); //$NON-NLS-1$
+            return null;
         }
         return outFile;
     }
 
     @Override
     public void get(String[] argv) throws IOException {
-        final String[] usage = { "Load an image remotely or locally", "Usage: image:get [Options] SOURCE", //$NON-NLS-1$ //$NON-NLS-2$
-            "  -f --file     Open an image from a file", // $NON-NLS-1$
-            "  -u --url      Open an image from an URL", "  -? --help        show help" }; // $NON-NLS-1$ //$NON-NLS-2$
+        final String[] usage = { "Load images remotely or locally", "Usage: image:get ([-f file]... [-u url]...)", //$NON-NLS-1$ //$NON-NLS-2$
+            "  -f --file=FILE     open an image from a file", // $NON-NLS-1$ //$NON-NLS-1$
+            "  -u --url=URL       open an image from an URL", //$NON-NLS-1$
+            "  -? --help          show help" }; // $NON-NLS-1$ //$NON-NLS-1$
 
         final Option opt = Options.compile(usage).parse(argv);
-        final List<String> args = opt.args();
+        final List<String> fargs = opt.getList("file"); //$NON-NLS-1$
+        final List<String> uargs = opt.getList("url"); //$NON-NLS-1$
 
-        if (opt.isSet("help") || args.isEmpty()) { //$NON-NLS-1$
+        if (opt.isSet("help") || (fargs.isEmpty() && uargs.isEmpty())) { //$NON-NLS-1$
             opt.usage();
             return;
         }
         GuiExecutor.instance().execute(() -> {
             AbstractFileModel dataModel = ViewerPluginBuilder.DefaultDataModel;
             dataModel.firePropertyChange(
-                new ObservableEvent(ObservableEvent.BasicAction.Select, dataModel, null, dataModel));
+                new ObservableEvent(ObservableEvent.BasicAction.SELECT, dataModel, null, dataModel));
             if (opt.isSet("file")) { //$NON-NLS-1$
-                args.stream().map(s -> new File(s)).filter(f -> f.isFile())
+                fargs.stream().map(File::new).filter(File::isFile)
                     .forEach(f -> ViewerPluginBuilder.openSequenceInDefaultPlugin(f, true, true));
             }
             if (opt.isSet("url")) { //$NON-NLS-1$
-                args.stream().map(this::getFile)
+                uargs.stream().map(this::getFile)
                     .forEach(f -> ViewerPluginBuilder.openSequenceInDefaultPlugin(f, true, true));
             }
         });

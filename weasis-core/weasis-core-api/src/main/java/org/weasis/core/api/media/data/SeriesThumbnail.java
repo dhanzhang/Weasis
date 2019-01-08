@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.api.media.data;
 
 import java.awt.AlphaComposite;
@@ -24,6 +34,7 @@ import java.awt.event.FocusListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.io.File;
+import java.util.Arrays;
 import java.util.List;
 
 import javax.swing.BorderFactory;
@@ -37,6 +48,8 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.LineBorder;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.weasis.core.api.gui.util.AppProperties;
 import org.weasis.core.api.gui.util.GhostGlassPane;
 import org.weasis.core.api.image.OpManager;
@@ -47,6 +60,8 @@ import org.weasis.core.api.util.FontTools;
 public class SeriesThumbnail extends Thumbnail
     implements MouseListener, DragGestureListener, DragSourceListener, DragSourceMotionListener, FocusListener {
     private static final long serialVersionUID = 2359304176364341395L;
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(SeriesThumbnail.class);
 
     private static final int BUTTON_SIZE_HALF = 7;
     private static final Polygon startButton = new Polygon(new int[] { 0, 2 * BUTTON_SIZE_HALF, 0 },
@@ -65,24 +80,23 @@ public class SeriesThumbnail extends Thumbnail
     private final Border outMouseOverBorder =
         new CompoundBorder(new EmptyBorder(2, 2, 0, 2), BorderFactory.createEtchedBorder());
     private JProgressBar progressBar;
-    private final MediaSeries<?> series;
+    private final MediaSeries<? extends MediaElement> series;
     private Point dragPressed = null;
     private DragSource dragSource = null;
 
-    public SeriesThumbnail(final MediaSeries<?> sequence, int thumbnailSize) {
-        super((File) null, thumbnailSize);
+    public SeriesThumbnail(final MediaSeries<? extends MediaElement> sequence, int thumbnailSize) {
+        super(thumbnailSize);
         if (sequence == null) {
             throw new IllegalArgumentException("Sequence cannot be null"); //$NON-NLS-1$
         }
         this.series = sequence;
 
         // media can be null for seriesThumbnail
-        MediaElement<?> media = (MediaElement<?>) sequence.getMedia(MEDIA_POSITION.MIDDLE, null, null);
+        MediaElement media = sequence.getMedia(MEDIA_POSITION.MIDDLE, null, null);
         // Handle special case for DICOM SR
         if (media == null) {
-            List<MediaElement<?>> specialElements =
-                (List<MediaElement<?>>) series.getTagValue(TagW.DicomSpecialElementList);
-            if (specialElements != null && specialElements.size() > 0) {
+            List<MediaElement> specialElements = (List<MediaElement>) series.getTagValue(TagW.DicomSpecialElementList);
+            if (specialElements != null && !specialElements.isEmpty()) {
                 media = specialElements.get(0);
             }
         }
@@ -94,7 +108,7 @@ public class SeriesThumbnail extends Thumbnail
     }
 
     @Override
-    protected void init(MediaElement<?> media, boolean keepMediaCache, OpManager opManager) {
+    protected void init(MediaElement media, boolean keepMediaCache, OpManager opManager) {
         super.init(media, keepMediaCache, opManager);
         setBorder(outMouseOverBorder);
     }
@@ -106,6 +120,10 @@ public class SeriesThumbnail extends Thumbnail
     public void setProgressBar(JProgressBar progressBar) {
         if (progressBar == null) {
             removeMouseListener(this);
+        } else {
+            if (!Arrays.asList(this.getMouseListeners()).contains(this)) {
+                addMouseListener(this);
+            }
         }
         this.progressBar = progressBar;
     }
@@ -139,24 +157,26 @@ public class SeriesThumbnail extends Thumbnail
     }
 
     public synchronized void reBuildThumbnail(File file, MediaSeries.MEDIA_POSITION position) {
-        Object media = series.getMedia(position, null, null);
+        MediaElement media = series.getMedia(position, null, null);
         // Handle special case for DICOM SR
         if (media == null) {
-            List<MediaElement<?>> specialElements =
-                (List<MediaElement<?>>) series.getTagValue(TagW.DicomSpecialElementList);
+            List<MediaElement> specialElements = (List<MediaElement>) series.getTagValue(TagW.DicomSpecialElementList);
             if (specialElements != null && !specialElements.isEmpty()) {
                 media = specialElements.get(0);
             }
         }
-        if (file != null || media instanceof MediaElement<?>) {
+        if (file != null || media != null) {
             mediaPosition = position;
+            if (thumbnailPath != null && thumbnailPath.getPath().startsWith(AppProperties.FILE_CACHE_DIR.getPath())) {
+                FileUtil.delete(thumbnailPath); // delete old temp file
+            }
             thumbnailPath = file;
             readable = true;
             /*
              * Do not remove the image from the cache after building the thumbnail when the series is associated to a
              * explorerModel (stream should be closed at least when closing the application or when free the cache).
              */
-            buildThumbnail((MediaElement<?>) media, series.getTagValue(TagW.ExplorerModel) != null, null);
+            buildThumbnail(media, series.getTagValue(TagW.ExplorerModel) != null, null);
             revalidate();
             repaint();
         }
@@ -171,7 +191,8 @@ public class SeriesThumbnail extends Thumbnail
         if (update) {
             Object media = series.getMedia(mediaPosition, null, null);
             this.thumbnailSize = thumbnailSize;
-            buildThumbnail((MediaElement<?>) media, series.getTagValue(TagW.ExplorerModel) != null, null);
+            removeImageFromCache();
+            buildThumbnail((MediaElement) media, series.getTagValue(TagW.ExplorerModel) != null, null);
         }
     }
 
@@ -189,8 +210,8 @@ public class SeriesThumbnail extends Thumbnail
             drawGlassPane(p);
             glassPane.setVisible(true);
             dge.startDrag(null, series, this);
-            return;
         } catch (Exception e) {
+            LOGGER.error("Prepare to drag", e); //$NON-NLS-1$
         }
 
     }
@@ -240,14 +261,13 @@ public class SeriesThumbnail extends Thumbnail
         }
     }
 
-    public MediaSeries<?> getSeries() {
-        return series;
+    public MediaSeries<MediaElement> getSeries() {
+        return (MediaSeries<MediaElement>) series;
     }
 
     @Override
     public void focusGained(FocusEvent e) {
         if (!e.isTemporary()) {
-            // setBorder(onMouseOverBorder);
             JPanel container = getScrollPane();
             if (container != null) {
                 Rectangle bound = this.getBounds();
@@ -265,9 +285,7 @@ public class SeriesThumbnail extends Thumbnail
 
     @Override
     public void focusLost(FocusEvent e) {
-        // if (!e.isTemporary()) {
-        // setBorder(outMouseOverBorder);
-        // }
+        // Do nothing
     }
 
     private JPanel getScrollPane() {
@@ -288,63 +306,76 @@ public class SeriesThumbnail extends Thumbnail
 
     @Override
     protected void drawOverIcon(Graphics2D g2d, int x, int y, int width, int height) {
-        setBorder(series.isSelected() ? series.isFocused() ? onMouseOverBorderFocused : onMouseOverBorder
-            : outMouseOverBorder);
-        if (series.isOpen()) {
-            g2d.setPaint(Color.green);
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2d.fillArc(x + 2, y + 2, 7, 7, 0, 360);
-            g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_DEFAULT);
-        }
-        g2d.setPaint(Color.ORANGE);
-        // if (series.isSelected()) {
-        // g2d.drawRect(x + 12, y + 3, 5, 5);
-        // }
-        Integer splitNb = (Integer) series.getTagValue(TagW.SplitSeriesNumber);
-        g2d.setFont(FontTools.getFont10());
-        int hbleft = y + height - 2;
-        if (splitNb != null) {
-            g2d.drawString("#" + splitNb + " [" + series.size(null) + "]", x + 2, hbleft); //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-                                                                                           // $NON-NLS-1$ $NON-NLS-2$
-                                                                                           // $NON-NLS-1$ $NON-NLS-3$
-        } else {
-            g2d.drawString("[" + series.size(null) + "]", x + 2, hbleft); //$NON-NLS-1$ //$NON-NLS-2$ $NON-NLS-2$
-        }
-
-        // To avoid concurrency issue
-        final JProgressBar bar = progressBar;
-        if (bar != null) {
-            if (series.getFileSize() > 0.0) {
-                g2d.drawString(FileUtil.formatSize(series.getFileSize()), x + 2, hbleft - 12);
+        if (dragPressed == null) {
+            setBorder(series.isSelected() ? series.isFocused() ? onMouseOverBorderFocused : onMouseOverBorder
+                : outMouseOverBorder);
+            if (series.isOpen()) {
+                g2d.setPaint(Color.BLACK);
+                g2d.fillRect(x, y, 11, 11);
+                g2d.setPaint(Color.GREEN);
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2d.fillArc(x + 2, y + 2, 7, 7, 0, 360);
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_DEFAULT);
             }
-            if (bar.isVisible()) {
-                // Draw in the bottom right corner of thumbnail
-                int shiftx = thumbnailSize - bar.getWidth();
-                int shifty = thumbnailSize - bar.getHeight();
-                g2d.translate(shiftx, shifty);
-                bar.paint(g2d);
 
-                // Draw in the top right corner
-                SeriesImporter seriesLoader = series.getSeriesLoader();
-                boolean stopped = seriesLoader.isStopped();
+            g2d.setFont(FontTools.getFont10());
+            int fontHeight = (int) (FontTools.getAccurateFontHeight(g2d) + 1.5f);
+            Integer splitNb = (Integer) series.getTagValue(TagW.SplitSeriesNumber);
+            if (splitNb != null) {
+                String nb = "#" + splitNb; //$NON-NLS-1$
+                int w = g2d.getFontMetrics().stringWidth(nb);
+                g2d.setPaint(Color.BLACK);
+                int sx = x + width - 2 - w;
+                g2d.fillRect(sx - 2, y, w + 4, fontHeight);
+                g2d.setPaint(Color.ORANGE);
+                g2d.drawString(nb, sx, y + fontHeight - 3);
+            }
 
-                g2d.translate(-shiftx, -shifty);
-                shiftx = thumbnailSize - stopButton.width;
-                shifty = 5;
-                g2d.translate(shiftx, shifty);
-                g2d.setColor(Color.RED);
-                g2d.setComposite(stopped ? TRANSPARENT_COMPOSITE : SOLID_COMPOSITE);
-                g2d.fill(stopButton);
+            String nbImg = "[" + series.size(null) + "]"; //$NON-NLS-1$ //$NON-NLS-2$
+            int hbleft = y + height - 3;
+            int w = g2d.getFontMetrics().stringWidth(nbImg);
+            g2d.setPaint(Color.BLACK);
+            g2d.fillRect(x, y + height - fontHeight, w + 4, fontHeight);
+            g2d.setPaint(Color.ORANGE);
+            g2d.drawString(nbImg, x + 2, hbleft);
 
-                g2d.translate(-shiftx, -shifty);
-                shiftx = shiftx - 3 * BUTTON_SIZE_HALF;
-                shifty = 5;
-                g2d.translate(shiftx, shifty);
-                g2d.setColor(Color.GREEN);
-                g2d.setComposite(stopped ? SOLID_COMPOSITE : TRANSPARENT_COMPOSITE);
-                g2d.fill(startButton);
+            // To avoid concurrency issue
+            final JProgressBar bar = progressBar;
+            if (bar != null) {
+                if (series.getFileSize() > 0.0) {
+                    g2d.drawString(FileUtil.formatSize(series.getFileSize()), x + 2, hbleft - 12);
+                }
+                if (bar.isVisible()) {
+                    // Draw in the bottom right corner of thumbnail
+                    int shiftx = thumbnailSize - bar.getWidth();
+                    int shifty = thumbnailSize - bar.getHeight();
+                    g2d.translate(shiftx, shifty);
+                    bar.paint(g2d);
 
-                g2d.translate(-shiftx, -shifty);
+                    // Draw in the top right corner
+                    SeriesImporter seriesLoader = series.getSeriesLoader();
+                    if (seriesLoader != null) {
+                        boolean stopped = seriesLoader.isStopped();
+
+                        g2d.translate(-shiftx, -shifty);
+                        shiftx = thumbnailSize - stopButton.width;
+                        shifty = 5;
+                        g2d.translate(shiftx, shifty);
+                        g2d.setColor(Color.RED);
+                        g2d.setComposite(stopped ? TRANSPARENT_COMPOSITE : SOLID_COMPOSITE);
+                        g2d.fill(stopButton);
+
+                        g2d.translate(-shiftx, -shifty);
+                        shiftx = shiftx - 3 * BUTTON_SIZE_HALF;
+                        shifty = 5;
+                        g2d.translate(shiftx, shifty);
+                        g2d.setColor(Color.GREEN);
+                        g2d.setComposite(stopped ? SOLID_COMPOSITE : TRANSPARENT_COMPOSITE);
+                        g2d.fill(startButton);
+
+                        g2d.translate(-shiftx, -shifty);
+                    }
+                }
             }
         }
     }

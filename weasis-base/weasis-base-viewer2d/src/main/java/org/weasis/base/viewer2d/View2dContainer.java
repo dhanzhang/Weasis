@@ -1,24 +1,28 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.base.viewer2d;
 
 import java.awt.event.ActionEvent;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
 
-import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
@@ -39,20 +43,24 @@ import org.weasis.core.api.gui.Insertable.Type;
 import org.weasis.core.api.gui.InsertableUtil;
 import org.weasis.core.api.gui.util.ActionState;
 import org.weasis.core.api.gui.util.ActionW;
+import org.weasis.core.api.gui.util.ComboItemListener;
 import org.weasis.core.api.gui.util.Filter;
-import org.weasis.core.api.gui.util.GuiExecutor;
 import org.weasis.core.api.gui.util.JMVUtils;
 import org.weasis.core.api.gui.util.SliderChangeListener;
 import org.weasis.core.api.gui.util.SliderCineListener;
 import org.weasis.core.api.image.GridBagLayoutModel;
+import org.weasis.core.api.media.MimeInspector;
 import org.weasis.core.api.media.data.ImageElement;
 import org.weasis.core.api.media.data.MediaSeries;
+import org.weasis.core.api.media.data.MediaSeriesGroup;
 import org.weasis.core.api.media.data.Series;
 import org.weasis.core.api.media.data.SeriesEvent;
+import org.weasis.core.api.media.data.TagW;
 import org.weasis.core.api.service.BundlePreferences;
 import org.weasis.core.api.service.BundleTools;
 import org.weasis.core.ui.docking.DockableTool;
 import org.weasis.core.ui.docking.PluginTool;
+import org.weasis.core.ui.docking.UIManager;
 import org.weasis.core.ui.editor.SeriesViewerListener;
 import org.weasis.core.ui.editor.image.DefaultView2d;
 import org.weasis.core.ui.editor.image.ImageViewerPlugin;
@@ -65,6 +73,7 @@ import org.weasis.core.ui.editor.image.ZoomToolBar;
 import org.weasis.core.ui.editor.image.dockable.MeasureTool;
 import org.weasis.core.ui.editor.image.dockable.MiniTool;
 import org.weasis.core.ui.util.ColorLayerUI;
+import org.weasis.core.ui.util.DefaultAction;
 import org.weasis.core.ui.util.PrintDialog;
 import org.weasis.core.ui.util.Toolbar;
 
@@ -72,46 +81,42 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
 
     private static final Logger LOGGER = LoggerFactory.getLogger(View2dContainer.class);
 
-    public static final List<SynchView> SYNCH_LIST = Collections.synchronizedList(new ArrayList<SynchView>());
-
-    static {
-        SYNCH_LIST.add(SynchView.NONE);
-        SYNCH_LIST.add(SynchView.DEFAULT_STACK);
-        SYNCH_LIST.add(SynchView.DEFAULT_TILE);
-    }
-
-    public static final List<GridBagLayoutModel> LAYOUT_LIST =
-        Collections.synchronizedList(new ArrayList<GridBagLayoutModel>());
-
-    static {
-        LAYOUT_LIST.add(VIEWS_1x1);
-        LAYOUT_LIST.add(VIEWS_1x2);
-        LAYOUT_LIST.add(VIEWS_2x1);
-        LAYOUT_LIST.add(VIEWS_2x2_f2);
-        LAYOUT_LIST.add(VIEWS_2_f1x2);
-        LAYOUT_LIST.add(VIEWS_2x2);
-        LAYOUT_LIST.add(VIEWS_3x2);
-        LAYOUT_LIST.add(VIEWS_3x3);
-        LAYOUT_LIST.add(VIEWS_4x3);
-        LAYOUT_LIST.add(VIEWS_4x4);
-    }
+    // Unmodifiable list of the default synchronization elements
+    public static final List<SynchView> DEFAULT_SYNCH_LIST =
+        Arrays.asList(SynchView.NONE, SynchView.DEFAULT_STACK, SynchView.DEFAULT_TILE);
+    // Unmodifiable list of the default layout elements
+    public static final List<GridBagLayoutModel> DEFAULT_LAYOUT_LIST =
+        Arrays.asList(VIEWS_1x1, VIEWS_1x2, VIEWS_2x1, VIEWS_2x2_f2, VIEWS_2_f1x2, VIEWS_2x2);
 
     // Static tools shared by all the View2dContainer instances, tools are registered when a container is selected
     // Do not initialize tools in a static block (order initialization issue with eventManager), use instead a lazy
     // initialization with a method.
     public static final List<Toolbar> TOOLBARS = Collections.synchronizedList(new ArrayList<Toolbar>());
     public static final List<DockableTool> TOOLS = Collections.synchronizedList(new ArrayList<DockableTool>());
-    private static volatile boolean INI_COMPONENTS = false;
+    private static volatile boolean initComponents = false;
 
     public View2dContainer() {
         this(VIEWS_1x1, null);
     }
 
     public View2dContainer(GridBagLayoutModel layoutModel, String uid) {
-        super(EventManager.getInstance(), layoutModel, uid, ViewerFactory.NAME, ViewerFactory.ICON, null);
+        super(EventManager.getInstance(), layoutModel, uid, ViewerFactory.NAME, MimeInspector.imageIcon, null);
         setSynchView(SynchView.DEFAULT_STACK);
-        if (!INI_COMPONENTS) {
-            INI_COMPONENTS = true;
+        addComponentListener(new ComponentAdapter() {
+
+            @Override
+            public void componentResized(ComponentEvent e) {
+                ImageViewerPlugin<ImageElement> container = EventManager.getInstance().getSelectedView2dContainer();
+                if (container == View2dContainer.this) {
+                    Optional<ComboItemListener> layoutAction =
+                        EventManager.getInstance().getAction(ActionW.LAYOUT, ComboItemListener.class);
+                    layoutAction.ifPresent(a -> a.setDataListWithoutTriggerAction(getLayoutList().toArray()));
+                }
+            }
+        });
+
+        if (!initComponents) {
+            initComponents = true;
 
             // Add standard toolbars
             final BundleContext context = FrameworkUtil.getBundle(this.getClass()).getBundleContext();
@@ -121,6 +126,12 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
             String componentName = InsertableUtil.getCName(this.getClass());
             String key = "enable"; //$NON-NLS-1$
 
+            if (InsertableUtil.getBooleanProperty(BundleTools.SYSTEM_PREFERENCES, bundleName, componentName,
+                InsertableUtil.getCName(ImportToolBar.class), key, true)) {
+                Optional<Toolbar> b =
+                    UIManager.EXPLORER_PLUGIN_TOOLBARS.stream().filter(t -> t instanceof ImportToolBar).findFirst();
+                b.ifPresent(TOOLBARS::add);
+            }
             if (InsertableUtil.getBooleanProperty(BundleTools.SYSTEM_PREFERENCES, bundleName, componentName,
                 InsertableUtil.getCName(ViewerToolBar.class), key, true)) {
                 TOOLBARS.add(new ViewerToolBar<>(evtMg, evtMg.getMouseActions().getActiveButtons(),
@@ -168,10 +179,9 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
                 TOOLS.add(tool);
             }
 
-            
             if (InsertableUtil.getBooleanProperty(BundleTools.SYSTEM_PREFERENCES, bundleName, componentName,
                 InsertableUtil.getCName(ImageTool.class), key, true)) {
-                tool = new ImageTool(ImageTool.BUTTON_NAME); //$NON-NLS-1$
+                tool = new ImageTool(ImageTool.BUTTON_NAME);
                 TOOLS.add(tool);
             }
 
@@ -238,19 +248,17 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
 
     @Override
     public void close() {
-        super.close();
         ViewerFactory.closeSeriesViewer(this);
+        super.close();
+    }
 
-        GuiExecutor.instance().execute(new Runnable() {
-
-            @Override
-            public void run() {
-                for (ViewCanvas v : view2ds) {
-                    v.disposeView();
-                }
-            }
-        });
-
+    private boolean closeIfNoContent() {
+        if (getOpenSeries().isEmpty()) {
+            close();
+            handleFocusAfterClosing();
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -261,12 +269,12 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
             Object newVal = event.getNewValue();
             if (newVal instanceof SeriesEvent) {
                 SeriesEvent event2 = (SeriesEvent) newVal;
-                if (ObservableEvent.BasicAction.Add.equals(action)) {
+                if (ObservableEvent.BasicAction.ADD.equals(action)) {
                     SeriesEvent.Action action2 = event2.getActionCommand();
                     Object source = event2.getSource();
                     Object param = event2.getParam();
 
-                    if (SeriesEvent.Action.AddImage.equals(action2)) {
+                    if (SeriesEvent.Action.ADD_IMAGE.equals(action2)) {
                         if (source instanceof Series) {
                             Series series = (Series) source;
                             ViewCanvas view2DPane = eventManager.getSelectedViewPane();
@@ -287,13 +295,13 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
                                             view2DPane.setSeries(series, null);
                                         }
                                         if (imgIndex >= 0) {
-                                            sliceAction.setMinMaxValue(1, series.size(filter), imgIndex + 1);
+                                            sliceAction.setSliderMinMaxValue(1, series.size(filter), imgIndex + 1);
                                         }
                                     }
                                 }
                             }
                         }
-                    } else if (SeriesEvent.Action.loadImageInMemory.equals(action2)) {
+                    } else if (SeriesEvent.Action.PRELOADING.equals(action2)) {
                         if (source instanceof Series) {
                             Series s = (Series) source;
                             for (ViewCanvas<ImageElement> v : view2ds) {
@@ -304,17 +312,30 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
                         }
                     }
                 }
-            } else if (ObservableEvent.BasicAction.Remove.equals(action)) {
-                if (newVal instanceof Series) {
-                    Series series = (Series) newVal;
-                    for (ViewCanvas<ImageElement> v : view2ds) {
-                        MediaSeries<ImageElement> s = v.getSeries();
-                        if (series.equals(s)) {
-                            v.setSeries(null);
+            } else if (ObservableEvent.BasicAction.REMOVE.equals(action)) {
+                if (newVal instanceof MediaSeriesGroup) {
+                    MediaSeriesGroup group = (MediaSeriesGroup) newVal;
+                    // Patient Group
+                    if (TagW.Group.equals(group.getTagID())) {
+                        if (group.equals(getGroupID())) {
+                            // Close the content of the plug-in
+                            close();
+                            handleFocusAfterClosing();
+                        }
+                    }
+                    // Series Group
+                    else if (TagW.SubseriesInstanceUID.equals(group.getTagID())) {
+                        for (ViewCanvas<ImageElement> v : view2ds) {
+                            if (newVal.equals(v.getSeries())) {
+                                v.setSeries(null);
+                                if (closeIfNoContent()) {
+                                    return;
+                                }
+                            }
                         }
                     }
                 }
-            } else if (ObservableEvent.BasicAction.Replace.equals(action)) {
+            } else if (ObservableEvent.BasicAction.REPLACE.equals(action)) {
                 if (newVal instanceof Series) {
                     Series series = (Series) newVal;
                     for (ViewCanvas<ImageElement> v : view2ds) {
@@ -343,15 +364,10 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
         }
         try {
             // FIXME use classloader.loadClass or injection
-            Class<?> cl = Class.forName(clazz);
-            JComponent component = (JComponent) cl.newInstance();
-            if (component instanceof SeriesViewerListener) {
-                eventManager.addSeriesViewerListener((SeriesViewerListener) component);
-            }
-            return component;
+            return buildInstance(Class.forName(clazz));
 
         } catch (Exception e) {
-            LOGGER.error("Cannot create {}", clazz, e);
+            LOGGER.error("Cannot create {}", clazz, e); //$NON-NLS-1$
         }
         return null;
     }
@@ -378,7 +394,7 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
                 Class<?> clazz = Class.forName(type);
                 return defaultClass.isAssignableFrom(clazz);
             } catch (Exception e) {
-                LOGGER.error("Checking view type", e);
+                LOGGER.error("Checking view type", e); //$NON-NLS-1$
             }
         }
         return false;
@@ -388,17 +404,14 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
     public List<Action> getPrintActions() {
         ArrayList<Action> actions = new ArrayList<>(1);
         final String title = Messages.getString("View2dContainer.print_layout"); //$NON-NLS-1$
-        AbstractAction printStd =
-            new AbstractAction(title, new ImageIcon(ImageViewerPlugin.class.getResource("/icon/16x16/printer.png"))) { //$NON-NLS-1$
-
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    ColorLayerUI layer = ColorLayerUI.createTransparentLayerUI(View2dContainer.this);
-                    PrintDialog dialog =
-                        new PrintDialog(SwingUtilities.getWindowAncestor(View2dContainer.this), title, eventManager);
-                    ColorLayerUI.showCenterScreen(dialog, layer);
-                }
-            };
+        Consumer<ActionEvent> event = e -> {
+            ColorLayerUI layer = ColorLayerUI.createTransparentLayerUI(View2dContainer.this);
+            PrintDialog<?> dialog =
+                new PrintDialog<>(SwingUtilities.getWindowAncestor(View2dContainer.this), title, eventManager);
+            ColorLayerUI.showCenterScreen(dialog, layer);
+        };
+        DefaultAction printStd = new DefaultAction(title,
+            new ImageIcon(ImageViewerPlugin.class.getResource("/icon/16x16/printer.png")), event); //$NON-NLS-1$
         printStd.putValue(Action.ACCELERATOR_KEY, KeyStroke.getKeyStroke(KeyEvent.VK_P, 0));
         actions.add(printStd);
         return actions;
@@ -406,11 +419,52 @@ public class View2dContainer extends ImageViewerPlugin<ImageElement> implements 
 
     @Override
     public List<SynchView> getSynchList() {
-        return SYNCH_LIST;
+        return DEFAULT_SYNCH_LIST;
     }
 
     @Override
     public List<GridBagLayoutModel> getLayoutList() {
-        return LAYOUT_LIST;
+        int rx = 1;
+        int ry = 1;
+        double ratio = getWidth() / (double) getHeight();
+        if (ratio >= 1.0) {
+            rx = (int) Math.round(ratio * 1.5);
+        } else {
+            ry = (int) Math.round((1.0 / ratio) * 1.5);
+        }
+
+        ArrayList<GridBagLayoutModel> list = new ArrayList<>(DEFAULT_LAYOUT_LIST);
+        // Exclude 1x1
+        if (rx != ry && rx != 0 && ry != 0) {
+            int factorLimit = (int) (rx == 1 ? Math.round(getWidth() / 512.0) : Math.round(getHeight() / 512.0));
+            if (factorLimit < 1) {
+                factorLimit = 1;
+            }
+            if (rx > ry) {
+                int step = 1 + (rx / 20);
+                for (int i = rx / 2; i < rx; i = i + step) {
+                    addLayout(list, factorLimit, i, ry);
+                }
+            } else {
+                int step = 1 + (ry / 20);
+                for (int i = ry / 2; i < ry; i = i + step) {
+                    addLayout(list, factorLimit, rx, i);
+                }
+            }
+
+            addLayout(list, factorLimit, rx, ry);
+        }
+        Collections.sort(list, (o1, o2) -> Integer.compare(o1.getConstraints().size(), o2.getConstraints().size()));
+        return list;
+    }
+
+    private void addLayout(List<GridBagLayoutModel> list, int factorLimit, int rx, int ry) {
+        for (int i = 1; i <= factorLimit; i++) {
+            if (i > 2 || i * ry > 2 || i * rx > 2) {
+                if (i * ry < 50 && i * rx < 50) {
+                    list.add(ImageViewerPlugin.buildGridBagLayoutModel(i * ry, i * rx, view2dClass.getName()));
+                }
+            }
+        }
     }
 }

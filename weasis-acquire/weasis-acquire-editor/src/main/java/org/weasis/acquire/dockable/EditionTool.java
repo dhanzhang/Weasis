@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.dockable;
 
 import java.awt.BorderLayout;
@@ -11,14 +21,16 @@ import javax.swing.JScrollPane;
 import javax.swing.JViewport;
 
 import org.weasis.acquire.Messages;
+import org.weasis.acquire.dockable.components.AcquireActionButton;
 import org.weasis.acquire.dockable.components.AcquireActionButtonsPanel;
 import org.weasis.acquire.dockable.components.AcquireSubmitButtonsPanel;
 import org.weasis.acquire.dockable.components.actions.AbstractAcquireActionPanel;
 import org.weasis.acquire.dockable.components.actions.AcquireAction;
 import org.weasis.acquire.explorer.AcquireImageInfo;
 import org.weasis.acquire.explorer.AcquireManager;
-import org.weasis.base.viewer2d.EventManager;
+import org.weasis.acquire.explorer.gui.central.ImageGroupPane;
 import org.weasis.base.viewer2d.View2dContainer;
+import org.weasis.base.viewer2d.dockable.ImageTool;
 import org.weasis.core.api.media.data.ImageElement;
 import org.weasis.core.api.util.FontTools;
 import org.weasis.core.ui.docking.PluginTool;
@@ -28,18 +40,19 @@ import org.weasis.core.ui.editor.SeriesViewerListener;
 import org.weasis.core.ui.editor.image.ViewCanvas;
 
 import bibliothek.gui.dock.common.CLocation;
+import bibliothek.gui.dock.common.mode.ExtendedMode;
 
 /**
- * 
+ *
  * @author Yannick LARVOR
  * @version 2.5.0
  * @since 2.5.0 - 2016-04-06 - ylar - Creation
- * 
+ *
  */
 public class EditionTool extends PluginTool implements SeriesViewerListener {
     private static final long serialVersionUID = -3662409181835644699L;
 
-    public static final String BUTTON_NAME = Messages.getString("EditionTool.title"); //$NON-NLS-1$
+    public static final String BUTTON_NAME = Messages.getString("EditionTool.title_btn"); //$NON-NLS-1$
 
     private final JScrollPane rootPane = new JScrollPane();
 
@@ -50,26 +63,21 @@ public class EditionTool extends PluginTool implements SeriesViewerListener {
     private AbstractAcquireActionPanel centralPanel;
     private final AcquireSubmitButtonsPanel bottomPanel = new AcquireSubmitButtonsPanel();
 
-    ViewCanvas<ImageElement> view = EventManager.getInstance().getSelectedViewPane();
-
     public EditionTool(Type type) {
-        super(BUTTON_NAME, BUTTON_NAME, type, 9);
-        dockable.setTitleIcon(new ImageIcon(this.getClass().getResource("/icon/22x22/text-html.png")));
+        super(BUTTON_NAME, BUTTON_NAME, POSITION.EAST, ExtendedMode.NORMALIZED, type, 9);
+        dockable.setTitleIcon(new ImageIcon(ImageTool.class.getResource("/icon/16x16/image.png"))); //$NON-NLS-1$
         setDockableWidth(300);
         setLayout(new BorderLayout());
 
         topPanel = new AcquireActionButtonsPanel(this);
 
         add(topPanel, BorderLayout.NORTH);
-        add(bottomPanel, BorderLayout.SOUTH);
-
-        EventManager.getInstance().addSeriesViewerListener(this);
     }
 
     @Override
     public Component getToolComponent() {
         JViewport viewPort = rootPane.getViewport();
-        rootPane.setViewport(Optional.ofNullable(viewPort).orElse(new JViewport()));
+        rootPane.setViewport(Optional.ofNullable(viewPort).orElseGet(JViewport::new));
 
         if (viewPort.getView() != this) {
             viewPort.setView(this);
@@ -89,26 +97,49 @@ public class EditionTool extends PluginTool implements SeriesViewerListener {
     public void changingViewContentEvent(SeriesViewerEvent event) {
         EVENT type = event.getEventType();
         if (EVENT.SELECT_VIEW.equals(type) || EVENT.SELECT.equals(type) || EVENT.LAYOUT.equals(type)) {
+            AcquireImageInfo old = AcquireManager.getCurrentAcquireImageInfo();
+            ViewCanvas<ImageElement> oldView = AcquireManager.getCurrentView();
+
             if (event.getSeriesViewer() instanceof View2dContainer) {
                 ViewCanvas<ImageElement> view = ((View2dContainer) event.getSeriesViewer()).getSelectedImagePane();
                 if (view != null) {
-                    AcquireImageInfo old = AcquireManager.getCurrentAcquireImageInfo();
+                    // For better performance use nearest neighbor scaling
+                    view.changeZoomInterpolation(0);
                     AcquireImageInfo info = AcquireManager.findByImage(view.getImage());
                     AcquireManager.setCurrentAcquireImageInfo(info);
+                    AcquireManager.setCurrentView(view);
 
                     if (info != null && info != old) {
+                        if (old != null && oldView != null) {
+                            AcquireActionButton button = topPanel.getSelected();
+                            button.getAcquireAction().validate(old, oldView);
+                        }
+                        // topPanel.setSelected(topPanel.getSelected());
                         centralPanel.initValues(info, info.getNextValues());
                     }
                 }
+            }
+            if (event.getSeriesViewer() instanceof ImageGroupPane) {
+                if (old != null && oldView != null) {
+                    AcquireActionButton button = topPanel.getSelected();
+                    button.getAcquireAction().validate(old, oldView);
+                }
+                // Commit current editable
+                centralPanel.stopEditing();
             }
         }
     }
 
     public void setCentralPanel(AbstractAcquireActionPanel centralPanel) {
-        Optional.ofNullable(this.centralPanel).ifPresent(this::remove);
+        Optional.ofNullable(this.centralPanel).ifPresent(p -> {
+            p.remove(bottomPanel);
+            this.remove(p);
+        });
         this.centralPanel = centralPanel;
         this.add(this.centralPanel, BorderLayout.CENTER);
-        bottomPanel.setVisible(centralPanel.needValidationPanel());
+        if (centralPanel.needValidationPanel()) {
+            this.centralPanel.add(bottomPanel);
+        }
         revalidate();
         repaint();
     }

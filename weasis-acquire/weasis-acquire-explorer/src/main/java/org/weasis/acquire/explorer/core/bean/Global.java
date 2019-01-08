@@ -1,46 +1,98 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.explorer.core.bean;
 
-import java.util.Optional;
-import java.util.function.Consumer;
+import java.util.Iterator;
+import java.util.Map.Entry;
 
 import org.dcm4che3.data.Tag;
+import org.dcm4che3.util.TagUtils;
 import org.dcm4che3.util.UIDUtils;
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
+import org.weasis.core.api.media.data.TagUtil;
 import org.weasis.core.api.media.data.TagW;
+import org.weasis.core.api.media.data.Tagable;
 import org.weasis.dicom.codec.TagD;
 
-public class Global extends AbstractTagable {
+public class Global extends DefaultTagable {
 
-    public void init(Document xml) {
-        tags.put(TagD.get(Tag.StudyInstanceUID), UIDUtils.createUID());
-        Optional.of(xml).map(o -> o.getDocumentElement()).ifPresent(init);
+    public static final Integer patientDicomGroupNumber = Integer.parseInt("0010", 16); //$NON-NLS-1$
+
+    protected boolean allowFullEdition = true;
+
+    public Global() {
+        init((Tagable) null);
     }
 
-    private final Consumer<Element> init = e -> {
-        NodeList nodes = e.getChildNodes();
-        if (nodes != null) {
-            for (int i = 0; i < nodes.getLength(); i++) {
-                Node node = nodes.item(i);
-                setTag(node);
-            }
-        }
-    };
+    public void init(Tagable tagable) {
+        clear();
+        tags.put(TagD.get(Tag.StudyInstanceUID), UIDUtils.createUID());
 
-    private void setTag(Node node) {
-        if (node != null) {
-            TagW tag = TagD.get(node.getNodeName());
-            if (tag != null) {
-                tag.readValue(node.getTextContent(), this);
+        if (tagable != null) {
+            tagable.getTagEntrySetIterator().forEachRemaining(i -> {
+                TagW tag = i.getKey();
+                if (tag != null) {
+                    tags.put(tag, i.getValue());
+                }
+            });
+        }
+
+        allowFullEdition =
+            getTagValue(TagD.get(Tag.PatientID)) == null || getTagValue(TagD.get(Tag.PatientName)) == null;
+
+    }
+
+    /**
+     * Updates all Dicom Tags from the given document except Patient Dicom Group Tags
+     *
+     * @param xml
+     */
+    public void updateAllButPatient(Tagable tagable) {
+        if (tagable != null) {
+            tagable.getTagEntrySetIterator().forEachRemaining(i -> {
+                TagW tag = i.getKey();
+                if (tag != null && TagUtils.groupNumber(tag.getId()) != patientDicomGroupNumber) {
+                    tags.put(tag, i.getValue());
+                }
+            });
+        }
+    }
+
+    public boolean containsSameTagValues(Tagable tagable, Integer dicomGroupNumber) {
+        if (tagable != null) {
+            Iterator<Entry<TagW, Object>> iter = tagable.getTagEntrySetIterator();
+            while (iter.hasNext()) {
+                Entry<TagW, Object> entry = iter.next();
+                TagW tag = entry.getKey();
+                if (tag != null
+                    && (dicomGroupNumber == null || TagUtils.groupNumber(tag.getId()) == dicomGroupNumber)) {
+                    if (this.containTagKey(tag)) {
+                        if (!TagUtil.isEquals(this.getTagValue(tag), entry.getValue())) {
+                            return false;
+                        }
+                    } else if (entry.getValue() != null) {
+                        return false;
+                    }
+                }
             }
         }
+        return true;
     }
 
     @Override
     public String toString() {
         TagW name = TagD.get(Tag.PatientName);
-        return TagW.getFormattedText(getTagValue(name), null);
+        return name.getFormattedTagValue(getTagValue(name), null);
+    }
+
+    public boolean isAllowFullEdition() {
+        return allowFullEdition;
     }
 }

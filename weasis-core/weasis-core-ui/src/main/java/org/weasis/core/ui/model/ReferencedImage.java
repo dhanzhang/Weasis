@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model;
 
 import java.util.ArrayList;
@@ -33,8 +43,15 @@ public class ReferencedImage extends DefaultUUID {
         return frames;
     }
 
+    /**
+     * Set a list of frames. Each value matches to the position of a MediaElement (media.getKey()).
+     *
+     * Note: to match with DICOM Instance Frame the value must be increment of one (DicomFrame = frame + 1).
+     *
+     * @param frames
+     */
     public void setFrames(List<Integer> frames) {
-        this.frames = Optional.ofNullable(frames).orElse(new ArrayList<>());
+        this.frames = Optional.ofNullable(frames).orElseGet(ArrayList::new);
     }
 
 }

@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 #set( $symbol_pound = '#' )
 #set( $symbol_dollar = '$' )
 #set( $symbol_escape = '\' )
@@ -5,11 +15,8 @@ package ${package};
 
 import java.util.Hashtable;
 
-import org.apache.felix.scr.annotations.Activate;
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Deactivate;
-import org.apache.felix.scr.annotations.Property;
-import org.apache.felix.scr.annotations.Service;
+import org.osgi.service.component.annotations.Activate;
+import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.ComponentContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,9 +25,8 @@ import org.weasis.core.api.gui.Insertable;
 import org.weasis.core.api.gui.Insertable.Type;
 import org.weasis.core.api.gui.InsertableFactory;
 
-@Component(immediate = false)
-@Service
-@Property(name = "org.weasis.base.viewer2d.View2dContainer", value = "true")
+@org.osgi.service.component.annotations.Component(service = InsertableFactory.class, immediate = false, property = {
+"org.weasis.base.viewer2d.View2dContainer=true"  })
 public class SampleToolbarFactory implements InsertableFactory {
     private final Logger LOGGER = LoggerFactory.getLogger(SampleToolbarFactory.class);
 
@@ -46,6 +52,11 @@ public class SampleToolbarFactory implements InsertableFactory {
         }
     }
 
+
+    // ================================================================================
+    // OSGI service implementation
+    // ================================================================================
+    
     @Activate
     protected void activate(ComponentContext context) throws Exception {
         LOGGER.info("Activate the Sample tool bar");

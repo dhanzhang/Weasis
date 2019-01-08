@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.pref;
 
 import java.awt.Color;
@@ -38,7 +38,7 @@ public class ViewSetting {
     private int lineWidth;
     private boolean basicStatistics;
     private boolean moreStatistics;
-    private final List<Monitor> monitors = new ArrayList<Monitor>(2);
+    private final List<Monitor> monitors = new ArrayList<>(2);
 
     public void applyPreferences(Preferences prefs) {
         if (prefs != null) {
@@ -145,11 +145,11 @@ public class ViewSetting {
         }
     }
 
-    private boolean isTrueValue(String val) {
+    private static boolean isTrueValue(String val) {
         return "1".equals(val.trim()); //$NON-NLS-1$
     }
 
-    private void writeLabels(StringBuilder buffer, Measurement m) {
+    private static void writeLabels(StringBuilder buffer, Measurement m) {
         buffer.append(m.getId());
         buffer.append(":"); //$NON-NLS-1$
         buffer.append(m.getGraphicLabel() ? "1" : "0"); //$NON-NLS-1$ //$NON-NLS-2$

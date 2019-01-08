@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.api.service;
 
 import java.io.IOException;
@@ -13,8 +23,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.core.api.util.StringUtil;
 
+/**
+ * The Class AuditLog allows to write specific traces for the application usage.
+ *
+ */
 public class AuditLog {
-
+    // Share this logger
     public static final Logger LOGGER = LoggerFactory.getLogger(AuditLog.class);
 
     public static final String LOG_LEVEL = "org.apache.sling.commons.log.level"; //$NON-NLS-1$
@@ -25,6 +39,8 @@ public class AuditLog {
     public static final String LOG_FILE_SIZE = "org.apache.sling.commons.log.file.size"; //$NON-NLS-1$
     public static final String LOG_PATTERN = "org.apache.sling.commons.log.pattern"; //$NON-NLS-1$
     public static final String LOG_LOGGERS = "org.apache.sling.commons.log.names"; //$NON-NLS-1$
+
+    public static final String MARKER_PERF = "*PERF*"; //$NON-NLS-1$
 
     public enum LEVEL {
         TRACE, DEBUG, INFO, WARN, ERROR;
@@ -37,7 +53,7 @@ public class AuditLog {
             }
             return INFO;
         }
-    };
+    }
 
     public static void createOrUpdateLogger(BundleContext bundleContext, String loggerKey, String[] loggerVal,
         String level, String logFile, String pattern, String nbFiles, String logSize, String limit) {
@@ -75,7 +91,7 @@ public class AuditLog {
                             loggingProperties.put(LOG_PATTERN, pattern);
                         }
                         if (limit != null) {
-                            loggingProperties.put(LOG_STACKTRACE_LIMIT, StringUtil.hasText(limit) ? limit : "-1");
+                            loggingProperties.put(LOG_STACKTRACE_LIMIT, StringUtil.hasText(limit) ? limit : "-1"); //$NON-NLS-1$
                         }
                         logConfiguration.update(loggingProperties);
                     } catch (IOException e) {

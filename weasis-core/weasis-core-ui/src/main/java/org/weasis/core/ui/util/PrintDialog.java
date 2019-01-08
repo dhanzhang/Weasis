@@ -1,15 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
- *     Marcelo Porto - initial API and implementation Animati Sistemas de Informática Ltda. (http://www.animati.com.br)
- *     Nicolas Roduit
- *
- ******************************************************************************/
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 
 package org.weasis.core.ui.util;
 
@@ -34,7 +32,7 @@ import org.weasis.core.ui.editor.image.ViewCanvas;
 
 /**
  *
- * @author Marcelo Porto (marcelo@animati.com.br)
+ * @author Marcelo Porto (marcelo@animati.com.br), Nicolas Roduit
  */
 @SuppressWarnings("serial")
 public class PrintDialog<I extends ImageElement> extends javax.swing.JDialog {
@@ -120,7 +118,7 @@ public class PrintDialog<I extends ImageElement> extends javax.swing.JDialog {
         printButton = new javax.swing.JButton();
 
         printButton.setText(Messages.getString("PrintDialog.print")); //$NON-NLS-1$
-        printButton.addActionListener(e-> printAction());
+        printButton.addActionListener(e -> printAction());
 
         if (layout) {
             chckbxSelectedView = new JCheckBox(Messages.getString("PrintDialog.selected_view")); //$NON-NLS-1$

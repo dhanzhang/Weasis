@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic;
 
 import java.awt.BasicStroke;
@@ -43,7 +53,6 @@ import org.weasis.core.api.gui.util.ActionW;
 import org.weasis.core.api.gui.util.DecFormater;
 import org.weasis.core.api.gui.util.GeomUtil;
 import org.weasis.core.api.gui.util.MathUtil;
-import org.weasis.core.api.image.util.MeasurableLayer;
 import org.weasis.core.api.image.util.Unit;
 import org.weasis.core.ui.editor.image.ViewCanvas;
 import org.weasis.core.ui.model.layer.GraphicLayer;
@@ -62,8 +71,8 @@ import org.weasis.core.ui.util.MouseEventDouble;
 public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
     private static final long serialVersionUID = -8152071576417041112L;
     private static final Logger LOGGER = LoggerFactory.getLogger(AbstractGraphic.class);
-    
-    protected static final String NULL_MSG = "Null is not allowed";
+
+    protected static final String NULL_MSG = "Null is not allowed"; //$NON-NLS-1$
 
     protected Integer pointNumber;
     protected List<Point2D.Double> pts;
@@ -96,6 +105,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         setLabelVisible(graphic.labelVisible);
         setFilled(graphic.filled);
         setClassID(graphic.classID);
+        this.graphicLabel = graphic.graphicLabel == null ? null : graphic.graphicLabel.copy();
 
         this.variablePointsNumber = Objects.isNull(graphic.pointNumber) || graphic.pointNumber < 0;
         List<Point2D.Double> ptsList = graphic.pts.stream().filter(Objects::nonNull)
@@ -104,7 +114,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
             initCopy(graphic);
             buildGraphic(ptsList);
         } catch (InvalidShapeException e) {
-            LOGGER.error("Building graphic", e);
+            LOGGER.error("Building graphic", e); //$NON-NLS-1$
         }
     }
 
@@ -115,7 +125,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
 
     /**
      * Returns the total number of points. If the value is null or negative then return 10 as the default value
-     * 
+     *
      * @return total number of points
      */
     @Override
@@ -139,8 +149,8 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
 
     @Override
     public void setPts(List<Point2D.Double> pts) {
-        this.pts = Optional.ofNullable(pts).orElse(new ArrayList<Point2D.Double>(
-            Optional.ofNullable(getPtsNumber()).filter(v -> v >= 0).orElse(DEFAULT_PTS_SIZE)));
+        this.pts = Optional.ofNullable(pts).orElseGet(
+            () -> new ArrayList<>(Optional.ofNullable(getPtsNumber()).filter(v -> v >= 0).orElse(DEFAULT_PTS_SIZE)));
     }
 
     @Override
@@ -226,7 +236,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         }
     }
 
-    @XmlAttribute(name = "classId")
+    @XmlAttribute(name = "classId", required = false)
     @Override
     public Integer getClassID() {
         return classID;
@@ -256,16 +266,22 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         }
     }
 
-    @XmlElement(name = "label", required = false)
+    @XmlElement(name = "graphicLabel", required = false)
     @Override
     public GraphicLabel getGraphicLabel() {
         return graphicLabel;
+    }
+
+    public void setGraphicLabel(GraphicLabel graphicLabel) {
+        this.graphicLabel = graphicLabel;
     }
 
     @Override
     public void setLayer(GraphicLayer layer) {
         Objects.requireNonNull(layer, NULL_MSG);
         this.layer = layer;
+        // Adapt the default layerType
+        setLayerType(layer.getType());
     }
 
     @XmlIDREF
@@ -277,7 +293,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
 
     @Override
     public String getDescription() {
-        return "";
+        return ""; //$NON-NLS-1$
     }
 
     @Override
@@ -301,7 +317,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
 
     @Override
     public Boolean intersects(Rectangle rectangle, AffineTransform transform) {
-        return Optional.ofNullable(rectangle).map(r -> getArea(transform).intersects(r)).orElse(false);
+        return Optional.ofNullable(rectangle).map(getArea(transform)::intersects).orElse(false);
     }
 
     @Override
@@ -349,7 +365,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         Consumer<Shape> applyShape = s -> {
             Rectangle2D rect;
 
-            if (s instanceof AdvancedShape && ((AdvancedShape) s).shapeList.size() > 0) {
+            if (s instanceof AdvancedShape && !((AdvancedShape) s).shapeList.isEmpty()) {
                 // Assuming first shape is the user drawing path, else stands for decoration
                 Shape generalPath = ((AdvancedShape) s).shapeList.get(0).getShape();
                 rect = generalPath.getBounds2D();
@@ -368,7 +384,14 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
 
     @Override
     public void updateLabel(Object source, ViewCanvas<?> view2d) {
-        this.updateLabel(source, view2d, null);
+        boolean releasedEvent = false;
+
+        if (source instanceof MouseEvent) {
+            releasedEvent = ((MouseEvent) source).getID() == MouseEvent.MOUSE_RELEASED;
+        } else if (source instanceof Boolean) {
+            releasedEvent = (Boolean) source;
+        }
+        this.updateLabel(view2d, null, releasedEvent);
     }
 
     @Override
@@ -610,7 +633,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         int nearestHandlePtIndex = -1;
         final Point2D mousePoint = Optional.ofNullable(mouseEvent).map(evt -> evt.getImageCoordinates()).orElse(null);
 
-        if (mousePoint != null && !pts.isEmpty()) {
+        if (mousePoint != null && !pts.isEmpty() && !layer.getLocked()) {
             double minHandleDistance = Double.MAX_VALUE;
             double maxHandleDistance =
                 HANDLE_SIZE * 1.5 / GeomUtil.extractScalingFactor(getAffineTransform(mouseEvent));
@@ -618,7 +641,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
             for (int index = 0; index < pts.size(); index++) {
                 Point2D handlePoint = pts.get(index);
                 double handleDistance =
-                    Optional.ofNullable(handlePoint).map(pt -> mousePoint.distance(pt)).orElse(Double.MAX_VALUE);
+                    Optional.ofNullable(handlePoint).map(mousePoint::distance).orElse(Double.MAX_VALUE);
 
                 if (handleDistance <= maxHandleDistance && handleDistance < minHandleDistance) {
                     minHandleDistance = handleDistance;
@@ -633,7 +656,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         Map<Double, Integer> indexByDistanceMap = new TreeMap<>();
         final Point2D mousePoint = Optional.ofNullable(mouseEvent).map(evt -> evt.getImageCoordinates()).orElse(null);
 
-        if (mousePoint != null && !pts.isEmpty()) {
+        if (mousePoint != null && !pts.isEmpty() && !layer.getLocked()) {
             double maxHandleDistance =
                 HANDLE_SIZE * 1.5 / GeomUtil.extractScalingFactor(getAffineTransform(mouseEvent));
 
@@ -718,6 +741,13 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         firePropertyChange("graphicLabel", oldLabel, graphicLabel); //$NON-NLS-1$
     }
 
+    @Override
+    public void setLabel(GraphicLabel label) {
+        GraphicLabel oldLabel = Optional.ofNullable(graphicLabel).map(gl -> gl.copy()).orElse(null);
+        graphicLabel = label;
+        fireLabelChanged(oldLabel);
+    }
+
     public void setLabel(String[] labels, ViewCanvas<?> view2d, Point2D pos) {
         GraphicLabel oldLabel = Optional.ofNullable(graphicLabel).map(gl -> gl.copy()).orElse(null);
 
@@ -744,30 +774,20 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         }
     }
 
-    public void updateLabel(Object source, ViewCanvas<?> view2d, Point2D pos) {
-        boolean releasedEvent = false;
-        MeasurableLayer layer = view2d == null ? null : view2d.getMeasurableLayer();
-
-        if (source instanceof MouseEvent) {
-            releasedEvent = ((MouseEvent) source).getID() == MouseEvent.MOUSE_RELEASED;
-        } else if (source instanceof Boolean) {
-            releasedEvent = (Boolean) source;
-        }
-
-        boolean isMultiSelection = false; // default is single selection
-
+    public void updateLabel(ViewCanvas<?> view2d, Point2D pos, boolean releasedEvent) {
         List<Graphic> selectedGraphics =
             view2d == null ? Collections.emptyList() : view2d.getGraphicManager().getSelectedGraphics();
-        isMultiSelection = selectedGraphics.size() > 1;
+        boolean isMultiSelection = selectedGraphics.size() > 1;
 
         List<MeasureItem> measList = null;
         String[] labels = null;
 
         // If isMultiSelection is false, it should return all enable computed measurements when
         // quickComputing is enable or when releasedEvent is true
-        if (labelVisible || !isMultiSelection) {
+        if ((labelVisible || !isMultiSelection) && getLayerType() == LayerType.MEASURE) {
             Unit displayUnit = view2d == null ? null : (Unit) view2d.getActionValue(ActionW.SPATIAL_UNIT.cmd());
-            measList = computeMeasurements(layer, releasedEvent, displayUnit);
+            measList =
+                computeMeasurements(view2d == null ? null : view2d.getMeasurableLayer(), releasedEvent, displayUnit);
         }
 
         if (labelVisible && measList != null && !measList.isEmpty()) {
@@ -815,7 +835,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
         setLabel(labels, view2d, pos);
 
         // update MeasureTool on the fly without calling again getMeasurements
-        if (!isMultiSelection && view2d != null) {
+        if (selectedGraphics.size() == 1 && this.equals(selectedGraphics.get(0)) && view2d != null) {
             for (GraphicSelectionListener gfxListener : view2d.getGraphicManager().getGraphicSelectionListeners()) {
                 gfxListener.updateMeasuredItems(measList);
             }
@@ -896,8 +916,7 @@ public abstract class AbstractGraphic extends DefaultUUID implements Graphic {
 
     @Override
     public void setLayerType(LayerType layerType) {
-        Objects.requireNonNull(layerType, NULL_MSG);
-        this.layerType = layerType;
+        this.layerType = Objects.requireNonNull(layerType, NULL_MSG);
     }
 
     static class Adapter extends XmlAdapter<AbstractGraphic, Graphic> {

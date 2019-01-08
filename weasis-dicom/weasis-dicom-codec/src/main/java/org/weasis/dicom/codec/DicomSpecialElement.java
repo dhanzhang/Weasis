@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.codec;
 
 import java.io.File;
@@ -21,8 +21,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-
-import javax.media.jai.PlanarImage;
 
 import org.dcm4che3.data.Attributes;
 import org.dcm4che3.data.Sequence;
@@ -38,7 +36,7 @@ import org.weasis.core.api.util.StringUtil.Suffix;
 import org.weasis.dicom.codec.macro.SOPInstanceReferenceAndMAC;
 import org.weasis.dicom.codec.utils.DicomMediaUtils;
 
-public class DicomSpecialElement extends MediaElement<PlanarImage> {
+public class DicomSpecialElement extends MediaElement {
     private static final Logger LOGGER = LoggerFactory.getLogger(DicomSpecialElement.class);
 
     public static final SeriesComparator<DicomSpecialElement> ORDER_BY_DESCRIPTION =
@@ -81,8 +79,7 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
                 Integer val1 = TagD.getTagValue(m1, Tag.SeriesNumber, Integer.class);
                 Integer val2 = TagD.getTagValue(m2, Tag.SeriesNumber, Integer.class);
                 if (val1 != null && val2 != null) {
-                    // inverse number
-                    int comp = val1 > val2 ? -1 : (val1 == val2 ? 0 : 1);
+                    int comp = val1.compareTo(val2);
                     if (comp != 0) {
                         return comp;
                     }
@@ -151,7 +148,7 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
         if (getMediaReader().isEditableDicom()) {
             Attributes dcm = getMediaReader().getDicomObject();
             if (dcm != null) {
-                try (DicomOutputStream out = new DicomOutputStream(output)){
+                try (DicomOutputStream out = new DicomOutputStream(output)) {
                     out.writeDataset(dcm.createFileMetaInformation(UID.ImplicitVRLittleEndian), dcm);
                     return true;
                 } catch (IOException e) {
@@ -160,10 +157,6 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
             }
         }
         return super.saveToFile(output);
-    }
-
-    @Override
-    public void dispose() {
     }
 
     public static final List<DicomSpecialElement> getPRfromSopUID(String seriesUID, String sopUID, Integer frameNumber,
@@ -183,28 +176,29 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
     }
 
     public static boolean isSopuidInReferencedSeriesSequence(Attributes[] seq, String seriesUID, String sopUID,
-        Integer frameNumber) {
+        Integer dicomFrameNumber) {
         if (seq != null) {
             for (Attributes item : seq) {
                 if (seriesUID.equals(item.getString(Tag.SeriesInstanceUID))) {
-                    Sequence seq2 = item.getSequence(Tag.ReferencedImageSequence);
-                    if (seq2 != null) {
-                        for (Attributes sop : seq2) {
-                            if (sopUID.equals(sop.getString(Tag.ReferencedSOPInstanceUID))) {
-                                if (frameNumber != null && frameNumber > 1) {
-                                    int[] seqFrame = DicomMediaUtils.getIntAyrrayFromDicomElement(sop,
-                                        Tag.ReferencedFrameNumber, null);
-                                    if (seqFrame == null || seqFrame.length == 0) {
+                    Sequence refImgs = item.getSequence(Tag.ReferencedImageSequence);
+                    if (refImgs == null || refImgs.isEmpty()) {
+                        return true;
+                    }
+
+                    for (Attributes sop : refImgs) {
+                        if (sopUID.equals(sop.getString(Tag.ReferencedSOPInstanceUID))) {
+                            if (dicomFrameNumber == null) {
+                                return true;
+                            }
+                            int[] seqFrame =
+                                DicomMediaUtils.getIntAyrrayFromDicomElement(sop, Tag.ReferencedFrameNumber, null);
+                            if (seqFrame == null || seqFrame.length == 0) {
+                                return true;
+                            } else {
+                                for (int k : seqFrame) {
+                                    if (k == dicomFrameNumber) {
                                         return true;
-                                    } else {
-                                        for (int k : seqFrame) {
-                                            if (k == frameNumber) {
-                                                return true;
-                                            }
-                                        }
                                     }
-                                } else {
-                                    return true;
                                 }
                             }
                         }
@@ -216,16 +210,16 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
     }
 
     public static boolean isSopuidInReferencedSeriesSequence(Map<String, SOPInstanceReferenceAndMAC> seq, String sopUID,
-        Integer frameNumber) {
+        Integer dicomFrameNumber) {
         if (seq != null && StringUtil.hasText(sopUID) && seq.containsKey(sopUID)) {
-            if (frameNumber != null && frameNumber > 1) {
+            if (dicomFrameNumber != null) {
                 SOPInstanceReferenceAndMAC val = seq.get(sopUID);
                 int[] seqFrame = val == null ? null : val.getReferencedFrameNumber();
                 if (seqFrame == null || seqFrame.length == 0) {
                     return true;
                 } else {
                     for (int k : seqFrame) {
-                        if (k == frameNumber) {
+                        if (k == dicomFrameNumber.intValue()) {
                             return true;
                         }
                     }
@@ -273,7 +267,7 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
                 }
             }
         }
-        return  koElementSet ==null ? Collections.emptySet() : koElementSet;
+        return koElementSet == null ? Collections.emptySet() : koElementSet;
     }
 
     public static final Collection<RejectedKOSpecialElement> getRejectionKoSpecialElements(
@@ -302,11 +296,11 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
                 }
             }
         }
-        return koElementSet ==null ? Collections.emptySet() : koElementSet;
+        return koElementSet == null ? Collections.emptySet() : koElementSet;
     }
 
     public static final RejectedKOSpecialElement getRejectionKoSpecialElement(
-        Collection<DicomSpecialElement> specialElements, String seriesUID, String sopUID, Integer frameNumber) {
+        Collection<DicomSpecialElement> specialElements, String seriesUID, String sopUID, Integer dicomFrameNumber) {
 
         if (specialElements == null) {
             return null;
@@ -317,7 +311,7 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
             if (element instanceof RejectedKOSpecialElement) {
                 RejectedKOSpecialElement koElement = (RejectedKOSpecialElement) element;
                 if (isSopuidInReferencedSeriesSequence(koElement.getReferencedSOPInstanceUIDObject(seriesUID), sopUID,
-                    frameNumber)) {
+                    dicomFrameNumber)) {
                     if (koList == null) {
                         koList = new ArrayList<>();
                     }
@@ -335,7 +329,7 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
     }
 
     public static final List<PRSpecialElement> getPRSpecialElements(Collection<DicomSpecialElement> specialElements,
-        String seriesUID, String sopUID, Integer frameNumber) {
+        String seriesUID, String sopUID, Integer dicomFrameNumber) {
 
         if (specialElements == null) {
             return Collections.emptyList();
@@ -347,13 +341,11 @@ public class DicomSpecialElement extends MediaElement<PlanarImage> {
             if (element instanceof PRSpecialElement) {
                 PRSpecialElement prElement = (PRSpecialElement) element;
                 Attributes[] seq = TagD.getTagValue(prElement, Tag.ReferencedSeriesSequence, Attributes[].class);
-                if (isSopuidInReferencedSeriesSequence(seq, seriesUID, sopUID, frameNumber)) {
-
+                if (isSopuidInReferencedSeriesSequence(seq, seriesUID, sopUID, dicomFrameNumber)) {
                     if (prList == null) {
                         prList = new ArrayList<>();
                     }
                     prList.add(prElement);
-
                 }
             }
         }

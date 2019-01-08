@@ -1,11 +1,19 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.codec.utils;
 
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.weasis.core.api.media.data.MediaElement;
 import org.weasis.core.api.media.data.TagUtil;
 import org.weasis.core.api.media.data.TagW;
@@ -16,7 +24,6 @@ import org.weasis.dicom.codec.TagD.Level;
 import org.weasis.dicom.codec.display.Modality;
 
 public class SplittingModalityRules {
-    private static final Logger LOGGER = LoggerFactory.getLogger(SplittingModalityRules.class);
 
     private final Modality modality;
     private final List<Rule> singleFrameTags;
@@ -92,7 +99,7 @@ public class SplittingModalityRules {
             return condition;
         }
 
-        public boolean isTagValueMatching(MediaElement<?> seriesMedia, MediaElement<?> newMedia) {
+        public boolean isTagValueMatching(MediaElement seriesMedia, MediaElement newMedia) {
             Object val1 = seriesMedia.getTagValue(tag);
             Object val2 = newMedia.getTagValue(tag);
 
@@ -123,7 +130,7 @@ public class SplittingModalityRules {
             return this;
         }
 
-        public abstract boolean match(MediaElement<?> media);
+        public abstract boolean match(MediaElement media);
 
         public void addChild(Condition child) {
             throw new UnsupportedOperationException();
@@ -151,7 +158,7 @@ public class SplittingModalityRules {
 
     public static class And extends CompositeCondition {
         @Override
-        public boolean match(MediaElement<?> media) {
+        public boolean match(MediaElement media) {
             for (Condition child : childs) {
                 if (!child.match(media)) {
                     return not;
@@ -163,7 +170,7 @@ public class SplittingModalityRules {
 
     public static class Or extends CompositeCondition {
         @Override
-        public boolean match(MediaElement<?> media) {
+        public boolean match(MediaElement media) {
             for (Condition child : childs) {
                 if (child.match(media)) {
                     return !not;
@@ -191,9 +198,8 @@ public class SplittingModalityRules {
             return tag.getValue(value);
         }
 
-
         @Override
-        public boolean match(MediaElement<?> media) {
+        public boolean match(MediaElement media) {
             Object value = media.getTagValue(tag);
 
             if (Type.equals.equals(type)) {

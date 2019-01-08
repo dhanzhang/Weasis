@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.api.media.data;
 
 import java.io.File;
@@ -5,14 +15,16 @@ import java.nio.file.Paths;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.weasis.core.api.util.FileUtil;
+
 public class FileCache {
 
-    private final MediaReader<?> reader;
-    private volatile File downloadedFile;
+    private final MediaReader reader;
+    private volatile File originalTempFile;
     private volatile File transformedFile;
     private volatile boolean requireTransformation;
 
-    public FileCache(MediaReader<?> reader) {
+    public FileCache(MediaReader reader) {
         this.reader = Objects.requireNonNull(reader);
         this.requireTransformation = false;
     }
@@ -27,8 +39,8 @@ public class FileCache {
 
     public Optional<File> getOriginalFile() {
         File originalFile = null;
-        if (downloadedFile != null) {
-            originalFile = downloadedFile;
+        if (originalTempFile != null) {
+            originalFile = originalTempFile;
         } else if (isLocalFile()) {
             originalFile = Paths.get(reader.getUri()).toFile();
         }
@@ -39,15 +51,15 @@ public class FileCache {
         if (transformedFile != null) {
             return transformedFile;
         }
-        return getOriginalFile().get();
+        return  getOriginalFile().orElse(null);
     }
 
-    public File getDownloadedFile() {
-        return downloadedFile;
+    public File getOriginalTempFile() {
+        return originalTempFile;
     }
 
-    public void setDownloadedFile(File downloadedFile) {
-        this.downloadedFile = downloadedFile;
+    public void setOriginalTempFile(File downloadedFile) {
+        this.originalTempFile = downloadedFile;
     }
 
     public File getTransformedFile() {
@@ -80,6 +92,11 @@ public class FileCache {
             return f.get().lastModified();
         }
         return 0L;
+    }
+
+    public void dispose() {
+        FileUtil.delete(originalTempFile);
+        FileUtil.delete(transformedFile);
     }
 
 }

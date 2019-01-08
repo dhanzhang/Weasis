@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.editor.image;
 
 import java.awt.BasicStroke;
@@ -28,8 +28,6 @@ import java.awt.Shape;
 import java.awt.Stroke;
 import java.awt.Toolkit;
 import java.awt.Window;
-import java.awt.color.ColorSpace;
-import java.awt.event.ActionEvent;
 import java.awt.event.FocusEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
@@ -44,9 +42,6 @@ import java.awt.geom.Line2D;
 import java.awt.geom.NoninvertibleTransformException;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
-import java.awt.image.ColorModel;
-import java.awt.image.RenderedImage;
-import java.awt.image.SampleModel;
 import java.beans.PropertyChangeEvent;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,13 +51,10 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 
-import javax.media.jai.PlanarImage;
 import javax.swing.AbstractAction;
 import javax.swing.Action;
-import javax.swing.DefaultBoundedRangeModel;
 import javax.swing.ImageIcon;
 import javax.swing.JCheckBoxMenuItem;
-import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
 import javax.swing.KeyStroke;
@@ -73,6 +65,7 @@ import javax.swing.border.BevelBorder;
 import javax.swing.border.Border;
 import javax.swing.border.EtchedBorder;
 
+import org.opencv.core.CvType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.core.api.gui.Image2DViewer;
@@ -81,20 +74,18 @@ import org.weasis.core.api.gui.util.ActionState;
 import org.weasis.core.api.gui.util.ActionW;
 import org.weasis.core.api.gui.util.ComboItemListener;
 import org.weasis.core.api.gui.util.Filter;
-import org.weasis.core.api.gui.util.JMVUtils;
 import org.weasis.core.api.gui.util.MathUtil;
 import org.weasis.core.api.gui.util.MouseActionAdapter;
 import org.weasis.core.api.gui.util.SliderChangeListener;
+import org.weasis.core.api.gui.util.ToggleButtonListener;
 import org.weasis.core.api.gui.util.WinUtil;
+import org.weasis.core.api.image.AffineTransformOp;
 import org.weasis.core.api.image.FilterOp;
-import org.weasis.core.api.image.FlipOp;
 import org.weasis.core.api.image.ImageOpEvent;
 import org.weasis.core.api.image.ImageOpNode;
 import org.weasis.core.api.image.OpManager;
 import org.weasis.core.api.image.PseudoColorOp;
-import org.weasis.core.api.image.RotationOp;
 import org.weasis.core.api.image.WindowOp;
-import org.weasis.core.api.image.ZoomOp;
 import org.weasis.core.api.image.op.ByteLut;
 import org.weasis.core.api.image.util.ImageFiler;
 import org.weasis.core.api.image.util.KernelData;
@@ -107,8 +98,10 @@ import org.weasis.core.api.media.data.SeriesComparator;
 import org.weasis.core.api.media.data.TagW;
 import org.weasis.core.api.service.AuditLog;
 import org.weasis.core.api.util.FontTools;
+import org.weasis.core.api.util.LangUtil;
 import org.weasis.core.api.util.StringUtil;
 import org.weasis.core.ui.Messages;
+import org.weasis.core.ui.docking.DockableTool;
 import org.weasis.core.ui.docking.UIManager;
 import org.weasis.core.ui.editor.SeriesViewerEvent;
 import org.weasis.core.ui.editor.SeriesViewerEvent.EVENT;
@@ -118,19 +111,21 @@ import org.weasis.core.ui.model.AbstractGraphicModel;
 import org.weasis.core.ui.model.GraphicModel;
 import org.weasis.core.ui.model.graphic.DragGraphic;
 import org.weasis.core.ui.model.graphic.Graphic;
+import org.weasis.core.ui.model.graphic.GraphicSelectionListener;
 import org.weasis.core.ui.model.imp.XmlGraphicModel;
 import org.weasis.core.ui.model.layer.LayerAnnotation;
 import org.weasis.core.ui.model.layer.LayerType;
 import org.weasis.core.ui.model.layer.imp.RenderedImageLayer;
 import org.weasis.core.ui.model.utils.Draggable;
-import org.weasis.core.ui.model.utils.GraphicUtil;
 import org.weasis.core.ui.model.utils.bean.GraphicClipboard;
 import org.weasis.core.ui.model.utils.bean.PanPoint;
 import org.weasis.core.ui.model.utils.bean.PanPoint.State;
 import org.weasis.core.ui.model.utils.imp.DefaultViewModel;
 import org.weasis.core.ui.pref.Monitor;
+import org.weasis.core.ui.util.DefaultAction;
 import org.weasis.core.ui.util.MouseEventDouble;
 import org.weasis.core.ui.util.TitleMenuItem;
+import org.weasis.opencv.data.PlanarImage;
 
 /**
  * @author Nicolas Roduit, Benoit Jacquemoud
@@ -155,7 +150,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         pointer[4] = new Line2D.Double(0.0, 5.0, 0.0, 40.0);
     }
 
-    public static final String PROP_LAYER_OFFSET = "layer.offset";
+    public static final String PROP_LAYER_OFFSET = "layer.offset"; //$NON-NLS-1$
 
     public static final GraphicClipboard GRAPHIC_CLIPBOARD = new GraphicClipboard();
 
@@ -170,7 +165,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
     public static final Cursor DEFAULT_CURSOR = DefaultView2d.getNewCursor(Cursor.DEFAULT_CURSOR);
 
     protected final FocusHandler focusHandler = new FocusHandler();
-    protected final GraphicMouseHandler<E> graphicMouseHandler;
+    protected GraphicMouseHandler<E> graphicMouseHandler;
 
     private final PanPoint highlightedPosition = new PanPoint(State.CENTER);
     private final PanPoint startedDragPoint = new PanPoint(State.DRAGSTART);
@@ -204,7 +199,8 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         this.viewButtons = new ArrayList<>();
         this.tileOffset = 0;
 
-        imageLayer = new RenderedImageLayer<>(true);
+        imageLayer = new RenderedImageLayer<>();
+        actionsInView.put(ActionW.LENS.cmd(), false);
         initActionWState();
         graphicMouseHandler = new GraphicMouseHandler<>(this);
 
@@ -222,13 +218,8 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         imageLayer.addLayerChangeListener(this);
     }
 
-    @Override
-    public JComponent getJComponent() {
-        return this;
-    }
-
     protected void buildPanner() {
-        panner = Optional.ofNullable(panner).orElse(new Panner<>(this));
+        panner = Optional.ofNullable(panner).orElseGet(() -> new Panner<>(this));
     }
 
     @Override
@@ -237,21 +228,25 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
     }
 
     protected void initActionWState() {
-        actionsInView.put(ActionW.SPATIAL_UNIT.cmd(), Unit.PIXEL);
-        actionsInView.put(zoomTypeCmd, ZoomType.BEST_FIT);
+        E img = getImage();
+        actionsInView.put(ActionW.SPATIAL_UNIT.cmd(), img == null ? Unit.PIXEL : img.getPixelSpacingUnit());
+        actionsInView.put(ZOOM_TYPE_CMD, ZoomType.BEST_FIT);
         actionsInView.put(ActionW.ZOOM.cmd(), 0.0);
-        actionsInView.put(ActionW.LENS.cmd(), false);
+
         actionsInView.put(ActionW.DRAWINGS.cmd(), true);
+        actionsInView.put(LayerType.CROSSLINES.name(), true);
         actionsInView.put(ActionW.INVERSESTACK.cmd(), false);
         actionsInView.put(ActionW.FILTERED_SERIES.cmd(), null);
+        actionsInView.put(ActionW.FLIP.cmd(), false);
+        actionsInView.put(ActionW.ROTATION.cmd(), 0);
 
         OpManager disOp = getDisplayOpManager();
 
         disOp.setParamValue(WindowOp.OP_NAME, WindowOp.P_APPLY_WL_COLOR,
             eventManager.getOptions().getBooleanProperty(WindowOp.P_APPLY_WL_COLOR, true));
-        disOp.setParamValue(ZoomOp.OP_NAME, ZoomOp.P_INTERPOLATION, eventManager.getZoomSetting().getInterpolation());
-        disOp.setParamValue(RotationOp.OP_NAME, RotationOp.P_ROTATE, 0);
-        disOp.setParamValue(FlipOp.OP_NAME, FlipOp.P_FLIP, false);
+        disOp.setParamValue(AffineTransformOp.OP_NAME, AffineTransformOp.P_INTERPOLATION,
+            eventManager.getZoomSetting().getInterpolation());
+        disOp.setParamValue(AffineTransformOp.OP_NAME, AffineTransformOp.P_AFFINE_MATRIX, null);
         disOp.setParamValue(FilterOp.OP_NAME, FilterOp.P_KERNEL_DATA, KernelData.NONE);
         disOp.setParamValue(PseudoColorOp.OP_NAME, PseudoColorOp.P_LUT, ByteLut.defaultLUT);
         disOp.setParamValue(PseudoColorOp.OP_NAME, PseudoColorOp.P_LUT_INVERSE, false);
@@ -301,7 +296,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                 getViewButtons().add(synchButton);
             }
             SynchData synch = (SynchData) getActionValue(ActionW.SYNCH_LINK.cmd());
-            synchButton.setVisible(!SynchData.Mode.None.equals(synch.getMode()));
+            synchButton.setVisible(!SynchData.Mode.NONE.equals(synch.getMode()));
         } else {
             getViewButtons().remove(synchButton);
         }
@@ -321,31 +316,30 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
     public PixelInfo getPixelInfo(final Point p) {
         PixelInfo pixelInfo = new PixelInfo();
         E imageElement = imageLayer.getSourceImage();
-        if (imageElement != null && imageLayer.getReadIterator() != null) {
-            PlanarImage image = getPreprocessedImage(imageElement);
-            // realPoint to handle special case: non square pixel image
-            Point realPoint = new Point((int) Math.ceil(p.x / imageElement.getRescaleX() - 0.5),
-                (int) Math.ceil(p.y / imageElement.getRescaleY() - 0.5));
-            if (image != null && realPoint.x >= 0 && realPoint.y >= 0 && realPoint.x < image.getWidth()
-                && realPoint.y < image.getHeight()) {
+        PlanarImage image = imageLayer.getSourceRenderedImage();
+        if (imageElement != null && image != null) {
+            Rectangle2D area = viewModel.getModelArea();
+            Point offset = getImageLayer().getOffset();
+            if (offset != null) {
+                // Offset used for Crop operation
+                area.setRect(offset.getX(), offset.getY(), area.getWidth(), area.getHeight());
+                p.translate(-(int) area.getX(), -(int) area.getY());
+            }
+
+            if (area.contains(p)) {
                 try {
-                    pixelInfo.setPosition(p);
+                    // Handle special case of non square pixel image
+                    pixelInfo.setPosition(new Point(p.x, p.y));
                     pixelInfo.setPixelSpacingUnit(imageElement.getPixelSpacingUnit());
                     pixelInfo.setPixelSize(imageElement.getPixelSize());
-                    double[] c = imageLayer.getReadIterator().getPixel(realPoint.x, realPoint.y, (double[]) null); 
+                    double[] c = image.get(p.y, p.x);
                     pixelInfo.setPixelValueUnit(imageElement.getPixelValueUnit());
                     fillPixelInfo(pixelInfo, imageElement, c);
                     if (c != null && c.length >= 1) {
                         pixelInfo.setChannelNames(getChannelNames(image));
                     }
-
-                } catch (Throwable e) {
-                    // when image tile is not available anymore (file stream closed)
-                    System.gc();
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException et) {
-                    }
+                } catch (Exception e) {
+                    LOGGER.error("Get pixel value", e);//$NON-NLS-1$
                 }
             }
         }
@@ -354,16 +348,11 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
     protected static String[] getChannelNames(PlanarImage image) {
         if (image != null) {
-            ColorModel cm = image.getColorModel();
-            if (cm != null) {
-                ColorSpace space = cm.getColorSpace();
-                if (space != null) {
-                    String[] val = new String[space.getNumComponents()];
-                    for (int i = 0; i < val.length; i++) {
-                        val[i] = space.getName(i);
-                    }
-                    return val;
-                }
+            int channels = CvType.channels(image.type());
+            if (channels == 3) {
+                return new String[] { Messages.getString("DefaultView2d.blue"), Messages.getString("DefaultView2d.green"), Messages.getString("DefaultView2d.red") }; //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+            } else if (channels == 1) {
+                return new String[] { Messages.getString("DefaultView2d.gray") }; //$NON-NLS-1$
             }
         }
         return null;
@@ -422,6 +411,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
             lens.showLens(false);
             this.remove(lens);
             actionsInView.put(ActionW.LENS.cmd(), false);
+            lens = null;
         }
     }
 
@@ -444,11 +434,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
         closingSeries(oldsequence);
 
-        // Preserve show lens property
-        Object showLens = actionsInView.get(ActionW.LENS.cmd());
         initActionWState();
-        actionsInView.put(ActionW.LENS.cmd(), showLens);
-
         try {
             if (newSeries == null) {
                 setImage(null);
@@ -526,18 +512,18 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
     protected Rectangle getImageBounds(E img) {
         if (img != null) {
-            RenderedImage source = getPreprocessedImage(img);
+            PlanarImage source = getPreprocessedImage(img);
             // Get the displayed width (adapted in case of the aspect ratio is not 1/1)
             boolean nosquarePixel = MathUtil.isDifferent(img.getRescaleX(), img.getRescaleY());
             int width = source == null || nosquarePixel
-                ? img.getRescaleWidth(getImageSize(img, TagW.ImageWidth, TagW.get("Columns"))) : source.getWidth();
+                ? img.getRescaleWidth(getImageSize(img, TagW.ImageWidth, TagW.get("Columns"))) : source.width(); //$NON-NLS-1$
             int height = source == null || nosquarePixel
-                ? img.getRescaleHeight(getImageSize(img, TagW.ImageHeight, TagW.get("Rows"))) : source.getHeight();
+                ? img.getRescaleHeight(getImageSize(img, TagW.ImageHeight, TagW.get("Rows"))) : source.height(); //$NON-NLS-1$
             return new Rectangle(0, 0, width, height);
         }
         return new Rectangle(0, 0, 512, 512);
     }
-    
+
     protected void updateCanvas(E img, boolean triggerViewModelChangeListeners) {
         final Rectangle modelArea = getImageBounds(img);
         if (!modelArea.equals(getViewModel().getModelArea())) {
@@ -553,7 +539,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
             }
         }
     }
-    
+
     @Override
     public void updateCanvas(boolean triggerViewModelChangeListeners) {
         updateCanvas(getImage(), triggerViewModelChangeListeners);
@@ -578,7 +564,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
             closeLens();
         } else {
             E oldImage = imageLayer.getSourceImage();
-            if (img != null && !img.equals(oldImage)) {
+            if (!img.equals(oldImage)) {
                 updateGraphics = true;
                 actionsInView.put(ActionW.SPATIAL_UNIT.cmd(), img.getPixelSpacingUnit());
                 if (eventManager.getSelectedViewPane() == this) {
@@ -599,32 +585,23 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
                 imageLayer.fireOpEvent(new ImageOpEvent(ImageOpEvent.OpEvent.ImageChange, series, img, null));
                 resetZoom();
-                // Update zoom operation to the current image (Reset update to the previous one)
-                ImageOpNode node = imageLayer.getDisplayOpManager().getNode(ZoomOp.OP_NAME);
-                if (node != null) {
-                    double viewScale = getViewModel().getViewScale();
-                    node.setParam(ZoomOp.P_RATIO_X, viewScale * img.getRescaleX());
-                    node.setParam(ZoomOp.P_RATIO_Y, viewScale * img.getRescaleY());
-                }
+
                 imageLayer.setImage(img, (OpManager) actionsInView.get(ActionW.PREPROCESSING.cmd()));
 
                 if (AuditLog.LOGGER.isInfoEnabled()) {
                     PlanarImage image = img.getImage();
                     if (image != null) {
-                        StringBuilder pixSize = new StringBuilder();
-                        SampleModel sm = image.getSampleModel();
-                        if (sm != null) {
-                            int[] spsize = sm.getSampleSize();
-                            if (spsize != null && spsize.length > 0) {
-                                pixSize.append(spsize[0]);
-                                for (int i = 1; i < spsize.length; i++) {
-                                    pixSize.append(',');
-                                    pixSize.append(spsize[i]);
-                                }
-                            }
+                        int elemSize = CvType.ELEM_SIZE(image.type());
+                        int channels = CvType.channels(image.type());
+                        int bpp = (elemSize * 8) / channels;
+                        String[] elements = new String[channels];
+                        for (int i = 0; i < elements.length; i++) {
+                            elements[i] = Integer.toString(bpp);
                         }
+                        String pixSize = String.join(",", elements); //$NON-NLS-1$
+
                         AuditLog.LOGGER.info("open:image size:{},{} depth:{}", //$NON-NLS-1$
-                            new Object[] { image.getWidth(), image.getHeight(), pixSize.toString() });
+                            new Object[] { image.width(), image.height(), pixSize });
                     }
                 }
             }
@@ -639,6 +616,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                     img.setTag(TagW.PresentationModel, modelList);
                 }
                 setGraphicManager(modelList);
+                updateGraphicSelectionListener(eventManager.getSelectedView2dContainer());
             }
 
             if (panner != null) {
@@ -647,6 +625,20 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
             if (lens != null) {
                 lens.updateImage();
                 lens.updateZoom();
+            }
+        }
+    }
+    
+    @Override
+    public void updateGraphicSelectionListener(ImageViewerPlugin<E> viewerPlugin) {
+        if (viewerPlugin != null) {
+            List<DockableTool> tools = viewerPlugin.getToolPanel();
+            synchronized (tools) {
+                for (DockableTool p : tools) {
+                    if (p instanceof GraphicSelectionListener) {
+                        graphicManager.addGraphicSelectionListener((GraphicSelectionListener) p);
+                    }
+                }
             }
         }
     }
@@ -681,26 +673,25 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
     }
 
     protected double adjustViewScale(double viewScale) {
+        double ratio = viewScale;
+        if (ratio < DefaultViewModel.SCALE_MIN) {
+            ratio = DefaultViewModel.SCALE_MIN;
+        } else if (ratio > DefaultViewModel.SCALE_MAX) {
+            ratio = DefaultViewModel.SCALE_MAX;
+        }
         ActionState zoom = eventManager.getAction(ActionW.ZOOM);
         if (zoom instanceof SliderChangeListener) {
             SliderChangeListener z = (SliderChangeListener) zoom;
             // Adjust the best fit value according to the possible range of the model zoom action.
-            int sliderValue = ImageViewerEventManager.viewScaleToSliderValue(viewScale);
             if (eventManager.getSelectedViewPane() == this) {
                 // Set back the value to UI components as this value cannot be computed early.
-                z.setValueWithoutTriggerAction(sliderValue);
-                viewScale = ImageViewerEventManager.sliderValueToViewScale(z.getValue());
+                z.setRealValue(ratio, false);
+                ratio = z.getRealValue();
             } else {
-                DefaultBoundedRangeModel model = z.getModel();
-                if (sliderValue < model.getMinimum()) {
-                    sliderValue = model.getMinimum();
-                } else if (sliderValue > model.getMaximum()) {
-                    sliderValue = model.getMaximum();
-                }
-                viewScale = ImageViewerEventManager.sliderValueToViewScale(sliderValue);
+                ratio = z.toModelValue(z.toSliderValue(ratio));
             }
         }
-        return viewScale;
+        return ratio;
     }
 
     @SuppressWarnings("rawtypes")
@@ -751,38 +742,30 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
     }
 
     @Override
-    public RenderedImage getSourceImage() {
+    public PlanarImage getSourceImage() {
         E image = getImage();
         return image == null ? null : getPreprocessedImage(image);
     }
 
     @Override
     public final void center() {
-        Rectangle2D bound = getViewModel().getModelArea();
-        setCenter(bound.getWidth() / 2.0, bound.getHeight() / 2.0);
+        setCenter(0.0, 0.0);
     }
 
     @Override
-    public final void setCenter(Double x, Double y) {
-        int w = getWidth();
-        int h = getHeight();
+    public final void setCenter(Double modelOffsetX, Double modelOffsetY) {
         // Only apply when the panel size is not zero.
-        if (w != 0 && h != 0) {
-            double scale = getViewModel().getViewScale();
-            setOrigin(x - (w - 1) / (2.0 * scale), y - (h - 1) / (2.0 * scale));
+        if (getWidth() != 0 && getHeight() != 0) {
+            getViewModel().setModelOffset(modelOffsetX, modelOffsetY);
+            Optional.ofNullable(panner).ifPresent(Panner<E>::updateImageSize);
+            Optional.ofNullable(lens).ifPresent(ZoomWin<E>::updateZoom);
+            updateAffineTransform();
         }
     }
 
     /** Provides panning */
-    public final void setOrigin(Double x, Double y) {
-        getViewModel().setModelOffset(x, y);
-        Optional.ofNullable(panner).ifPresent(p -> p.updateImageSize());
-        Optional.ofNullable(lens).ifPresent(l -> l.updateZoom());
-    }
-
-    /** Provides panning */
     public final void moveOrigin(double x, double y) {
-        setOrigin(getViewModel().getModelOffsetX() + x, getViewModel().getModelOffsetY() + y);
+        setCenter(getViewModel().getModelOffsetX() + x, getViewModel().getModelOffsetY() + y);
     }
 
     @Override
@@ -791,13 +774,14 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
             if (PanPoint.State.CENTER.equals(point.getState())) {
                 highlightedPosition.setHighlightedPosition(point.isHighlightedPosition());
                 highlightedPosition.setLocation(point);
-                setCenter(point.getX(), point.getY());
+                Rectangle2D area = getViewModel().getModelArea();
+                setCenter(area.getWidth() * 0.5 - point.getX(), area.getHeight() * 0.5 - point.getY());
             } else if (PanPoint.State.MOVE.equals(point.getState())) {
                 moveOrigin(point.getX(), point.getY());
             } else if (PanPoint.State.DRAGSTART.equals(point.getState())) {
                 startedDragPoint.setLocation(getViewModel().getModelOffsetX(), getViewModel().getModelOffsetY());
             } else if (PanPoint.State.DRAGGING.equals(point.getState())) {
-                setOrigin(startedDragPoint.getX() + point.getX(), startedDragPoint.getY() + point.getY());
+                setCenter(startedDragPoint.getX() + point.getX(), startedDragPoint.getY() + point.getY());
             }
         }
     }
@@ -860,12 +844,12 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                 .ceil(10 / ((this.getGraphics().getFontMetrics(FontTools.getFont12()).stringWidth("0123456789") * 7.0) //$NON-NLS-1$
                     / getWidth()));
         fontSize = fontSize < 6 ? 6 : fontSize > 16 ? 16 : fontSize;
-        return new Font("SansSerif", 0, fontSize); //$NON-NLS-1$
+        return new Font(Font.SANS_SERIF, 0, fontSize);
     }
 
     /** paint routine */
     @Override
-    public synchronized void paintComponent(Graphics g) {
+    public void paintComponent(Graphics g) {
         if (g instanceof Graphics2D) {
             draw((Graphics2D) g);
         }
@@ -874,21 +858,20 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
     protected void draw(Graphics2D g2d) {
         Stroke oldStroke = g2d.getStroke();
         Paint oldColor = g2d.getPaint();
-        double viewScale = getViewModel().getViewScale();
-        double offsetX = getViewModel().getModelOffsetX() * viewScale;
-        double offsetY = getViewModel().getModelOffsetY() * viewScale;
+
         // Paint the visible area
-        g2d.translate(-offsetX, -offsetY);
         // Set font size for computing shared text areas that need to be repainted in different zoom magnitudes.
         Font defaultFont = getFont();
         g2d.setFont(defaultFont);
 
+        Point2D p = getClipViewCoordinatesOffset();
+        g2d.translate(p.getX(), p.getY());
         imageLayer.drawImage(g2d);
         drawLayers(g2d, affineTransform, inverseTransform);
-
-        g2d.translate(offsetX, offsetY);
+        g2d.translate(-p.getX(), -p.getY());
 
         drawPointer(g2d);
+        drawAffineInvariant(g2d);
         if (infoLayer != null) {
             g2d.setFont(getLayerFont());
             infoLayer.paint(g2d);
@@ -900,22 +883,23 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         g2d.setStroke(oldStroke);
     }
 
+    private void drawAffineInvariant(Graphics2D g2d) {
+    }
+
     protected void drawOnTop(Graphics2D g2d) {
     }
 
     @Override
     public void drawLayers(Graphics2D g2d, AffineTransform transform, AffineTransform inverseTransform) {
         if ((Boolean) actionsInView.get(ActionW.DRAWINGS.cmd())) {
-            graphicManager.draw(g2d, transform, inverseTransform,
-                new Rectangle2D.Double(modelToViewLength(getViewModel().getModelOffsetX()),
-                    modelToViewLength(getViewModel().getModelOffsetY()), getWidth(), getHeight()));
+            graphicManager.draw(g2d, transform, inverseTransform, null);
         }
     }
 
     @Override
     public void zoom(Double viewScale) {
         boolean defSize = MathUtil.isEqualToZero(viewScale);
-        ZoomType type = (ZoomType) actionsInView.get(zoomTypeCmd);
+        ZoomType type = (ZoomType) actionsInView.get(ZOOM_TYPE_CMD);
         double ratio = viewScale;
         if (defSize) {
             if (ZoomType.BEST_FIT.equals(type)) {
@@ -942,58 +926,75 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         if (panner != null) {
             panner.updateImageSize();
         }
-        ImageOpNode node = imageLayer.getDisplayOpManager().getNode(ZoomOp.OP_NAME);
-        E img = getImage();
-        if (img != null && node != null) {
-            node.setParam(ZoomOp.P_RATIO_X, ratio * img.getRescaleX());
-            node.setParam(ZoomOp.P_RATIO_Y, ratio * img.getRescaleY());
-            imageLayer.updateDisplayOperations();
-        }
     }
 
     protected void updateAffineTransform() {
         Rectangle2D modelArea = getViewModel().getModelArea();
         double viewScale = getViewModel().getViewScale();
-        affineTransform.setToScale(viewScale, viewScale);
+
+        double rWidth = modelArea.getWidth();
+        double rHeight = modelArea.getHeight();
 
         OpManager dispOp = getDisplayOpManager();
-        Boolean flip = JMVUtils.getNULLtoFalse(dispOp.getParamValue(FlipOp.OP_NAME, FlipOp.P_FLIP));
-        Integer rotationAngle = (Integer) dispOp.getParamValue(RotationOp.OP_NAME, RotationOp.P_ROTATE);
+        boolean flip = LangUtil.getNULLtoFalse((Boolean) actionsInView.get(ActionW.FLIP.cmd()));
+        Integer rotationAngle = (Integer) actionsInView.get(ActionW.ROTATION.cmd());
 
+        affineTransform.setToScale(flip ? -viewScale : viewScale, viewScale);
         if (rotationAngle != null && rotationAngle > 0) {
-            if (flip != null && flip) {
-                rotationAngle = 360 - rotationAngle;
-            }
-            affineTransform.rotate(Math.toRadians(rotationAngle), modelArea.getWidth() / 2.0,
-                modelArea.getHeight() / 2.0);
+            affineTransform.rotate(Math.toRadians(rotationAngle), rWidth / 2.0, rHeight / 2.0);
         }
-        if (flip != null && flip) {
-            // Using only one allows to enable or disable flip with the rotation action
+        if (flip) {
+            affineTransform.translate(-rWidth, 0.0);
+        }
 
-            // case FlipMode.TOP_BOTTOM:
-            // at = new AffineTransform(new double[] {1.0,0.0,0.0,-1.0});
-            // at.translate(0.0, -imageHt);
-            // break;
-            // case FlipMode.LEFT_RIGHT :
-            // at = new AffineTransform(new double[] {-1.0,0.0,0.0,1.0});
-            // at.translate(-imageWid, 0.0);
-            // break;
-            // case FlipMode.TOP_BOTTOM_LEFT_RIGHT:
-            // at = new AffineTransform(new double[] {-1.0,0.0,0.0,-1.0});
-            // at.translate(-imageWid, -imageHt);
-            affineTransform.scale(-1.0, 1.0);
-            affineTransform.translate(-modelArea.getWidth(), 0.0);
+        ImageOpNode node = dispOp.getNode(AffineTransformOp.OP_NAME);
+        if (node != null) {
+            Rectangle2D imgBounds = affineTransform.createTransformedShape(modelArea).getBounds2D();
+
+            double diffx = 0.0;
+            double diffy = 0.0;
+            Rectangle2D viewBounds = new Rectangle2D.Double(0, 0, getWidth(), getHeight());
+            Rectangle2D srcBounds = getImageViewBounds();
+
+            Rectangle2D dstBounds;
+            if (viewBounds.contains(srcBounds)) {
+                dstBounds = srcBounds;
+            } else {
+                dstBounds = viewBounds.createIntersection(srcBounds);
+
+                if (srcBounds.getX() < 0.0) {
+                    diffx += srcBounds.getX();
+                }
+                if (srcBounds.getY() < 0.0) {
+                    diffy += srcBounds.getY();
+                }
+            }
+
+            double[] fmx = new double[6];
+            affineTransform.getMatrix(fmx);
+            // adjust transformation matrix => move the center to keep all the image
+            fmx[4] -= imgBounds.getX() - diffx;
+            fmx[5] -= imgBounds.getY() - diffy;
+            affineTransform.setTransform(fmx[0], fmx[1], fmx[2], fmx[3], fmx[4], fmx[5]);
+
+            // Convert to openCV affine matrix
+            double[] m = new double[] { fmx[0], fmx[2], fmx[4], fmx[1], fmx[3], fmx[5] };
+            node.setParam(AffineTransformOp.P_AFFINE_MATRIX, m);
+
+            node.setParam(AffineTransformOp.P_DST_BOUNDS, dstBounds);
+            imageLayer.updateDisplayOperations();
         }
-        Point offset = (Point) actionsInView.get(PROP_LAYER_OFFSET);
+
+        // Keep the coordinates of the original image when cropping
+        Point offset = getImageLayer().getOffset();
         if (offset != null) {
-            // TODO not consistent with image coordinates after crop
             affineTransform.translate(-offset.getX(), -offset.getY());
         }
 
         try {
             inverseTransform.setTransform(affineTransform.createInverse());
         } catch (NoninvertibleTransformException e) {
-            e.printStackTrace();
+            LOGGER.error("Create inverse transform", e); //$NON-NLS-1$
         }
     }
 
@@ -1015,12 +1016,15 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
     @Override
     public void changeZoomInterpolation(Integer interpolation) {
-        Integer val = (Integer) getDisplayOpManager().getParamValue(ZoomOp.OP_NAME, ZoomOp.P_INTERPOLATION);
-        boolean update = val == null || val != interpolation;
+        Integer val =
+            (Integer) getDisplayOpManager().getParamValue(AffineTransformOp.OP_NAME, AffineTransformOp.P_INTERPOLATION);
+        boolean update = !Objects.equals(val, interpolation);
         if (update) {
-            getDisplayOpManager().setParamValue(ZoomOp.OP_NAME, ZoomOp.P_INTERPOLATION, interpolation);
+            getDisplayOpManager().setParamValue(AffineTransformOp.OP_NAME, AffineTransformOp.P_INTERPOLATION,
+                interpolation);
             if (lens != null) {
-                lens.getDisplayOpManager().setParamValue(ZoomOp.OP_NAME, ZoomOp.P_INTERPOLATION, interpolation);
+                lens.getDisplayOpManager().setParamValue(AffineTransformOp.OP_NAME, AffineTransformOp.P_INTERPOLATION,
+                    interpolation);
                 lens.updateZoom();
             }
             imageLayer.updateDisplayOperations();
@@ -1037,7 +1041,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         if (series == null) {
             return;
         }
-        RenderedImage dispImage = imageLayer.getDisplayImage();
+        PlanarImage dispImage = imageLayer.getDisplayImage();
         OpManager manager = imageLayer.getDisplayOpManager();
         final String command = evt.getPropertyName();
         if (command.equals(ActionW.SYNCH.cmd())) {
@@ -1059,8 +1063,10 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                 } else if (value.getLocation() != null) {
                     Boolean cutlines = (Boolean) actionsInView.get(ActionW.SYNCH_CROSSLINE.cmd());
                     if (cutlines != null && cutlines) {
-                        // Compute cutlines from the location of selected image
-                        computeCrosslines(value.getLocation().doubleValue());
+                        if (LangUtil.getNULLtoTrue((Boolean) actionsInView.get(LayerType.CROSSLINES.name()))) {
+                            // Compute cutlines from the location of selected image
+                            computeCrosslines(value.getLocation().doubleValue());
+                        }
                     } else {
                         double location = value.getLocation().doubleValue();
                         // TODO add a way in GUI to resynchronize series. Offset should be in Series tag and related
@@ -1086,10 +1092,10 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                 Double zoomFactor = (Double) actionsInView.get(ActionW.ZOOM.cmd());
                 // Avoid to reset zoom when the mode is not best fit
                 if (zoomFactor != null && zoomFactor >= 0.0) {
-                    Object zoomType = actionsInView.get(ViewCanvas.zoomTypeCmd);
-                    actionsInView.put(ViewCanvas.zoomTypeCmd, ZoomType.CURRENT);
+                    Object zoomType = actionsInView.get(ViewCanvas.ZOOM_TYPE_CMD);
+                    actionsInView.put(ViewCanvas.ZOOM_TYPE_CMD, ZoomType.CURRENT);
                     setImage(imgElement);
-                    actionsInView.put(ViewCanvas.zoomTypeCmd, zoomType);
+                    actionsInView.put(ViewCanvas.ZOOM_TYPE_CMD, zoomType);
                 } else {
                     setImage(imgElement);
                 }
@@ -1118,7 +1124,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
     private void propertyChange(final SynchEvent synch) {
         SynchData synchData = (SynchData) actionsInView.get(ActionW.SYNCH_LINK.cmd());
-        if (synchData != null && Mode.None.equals(synchData.getMode())) {
+        if (synchData != null && Mode.NONE.equals(synchData.getMode())) {
             return;
         }
 
@@ -1130,12 +1136,12 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                 continue;
             }
             if (command.equals(ActionW.WINDOW.cmd()) || command.equals(ActionW.LEVEL.cmd())) {
-                if (manager.setParamValue(WindowOp.OP_NAME, command, ((Integer) entry.getValue()).doubleValue())) {
+                if (manager.setParamValue(WindowOp.OP_NAME, command, ((Number) entry.getValue()).doubleValue())) {
                     imageLayer.updateDisplayOperations();
                 }
             } else if (command.equals(ActionW.ROTATION.cmd())) {
-                if (manager.setParamValue(RotationOp.OP_NAME, RotationOp.P_ROTATE, entry.getValue())) {
-                    imageLayer.updateDisplayOperations();
+                Object old = actionsInView.put(ActionW.ROTATION.cmd(), entry.getValue());
+                if (!Objects.equals(old, entry.getValue())) {
                     updateAffineTransform();
                 }
             } else if (command.equals(ActionW.RESET.cmd())) {
@@ -1146,11 +1152,11 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                 if (MathUtil.isDifferent(val, -200.0) && MathUtil.isDifferent(val, -100.0)) {
                     zoom(val);
                 } else {
-                    Object zoomType = actionsInView.get(ViewCanvas.zoomTypeCmd);
-                    actionsInView.put(ViewCanvas.zoomTypeCmd,
+                    Object zoomType = actionsInView.get(ViewCanvas.ZOOM_TYPE_CMD);
+                    actionsInView.put(ViewCanvas.ZOOM_TYPE_CMD,
                         MathUtil.isEqual(val, -100.0) ? ZoomType.REAL : ZoomType.BEST_FIT);
                     zoom(0.0);
-                    actionsInView.put(ViewCanvas.zoomTypeCmd, zoomType);
+                    actionsInView.put(ViewCanvas.ZOOM_TYPE_CMD, zoomType);
                 }
             } else if (command.equals(ActionW.LENSZOOM.cmd())) {
                 if (lens != null) {
@@ -1190,8 +1196,8 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
             } else if (command.equals(ActionW.FLIP.cmd())) {
                 // Horizontal flip is applied after rotation (To be compliant with DICOM PR)
-                if (manager.setParamValue(FlipOp.OP_NAME, FlipOp.P_FLIP, entry.getValue())) {
-                    imageLayer.updateDisplayOperations();
+                Object old = actionsInView.put(ActionW.FLIP.cmd(), entry.getValue());
+                if (!Objects.equals(old, entry.getValue())) {
                     updateAffineTransform();
                 }
             } else if (command.equals(ActionW.LUT.cmd())) {
@@ -1226,6 +1232,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         removeFocusListener(this);
         ToolTipManager.sharedInstance().unregisterComponent(this);
         imageLayer.removeLayerChangeListener(this);
+        Optional.ofNullable(lens).ifPresent(l -> l.showLens(false));
         if (series != null) {
             closingSeries(series);
             series = null;
@@ -1252,9 +1259,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         for (int i = 0; i < wheelListeners.length; i++) {
             this.removeMouseWheelListener(wheelListeners[i]);
         }
-        if (lens != null) {
-            lens.disableMouseAndKeyListener();
-        }
+        Optional.ofNullable(lens).ifPresent(l -> l.disableMouseAndKeyListener());
     }
 
     @Override
@@ -1289,6 +1294,20 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         } else if (e.getModifiers() == 0 && (e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_I)) {
             eventManager.fireSeriesViewerListeners(
                 new SeriesViewerEvent(eventManager.getSelectedView2dContainer(), null, null, EVENT.TOOGLE_INFO));
+        } else if (e.isAltDown() && e.getKeyCode() == KeyEvent.VK_L) {
+            // Counterclockwise
+            eventManager.getAction(ActionW.ROTATION, SliderChangeListener.class)
+                .ifPresent(a -> a.setSliderValue((a.getSliderValue() + 270) % 360));
+        } else if (e.isAltDown() && e.getKeyCode() == KeyEvent.VK_R) {
+            // Clockwise
+            eventManager.getAction(ActionW.ROTATION, SliderChangeListener.class)
+                .ifPresent(a -> a.setSliderValue((a.getSliderValue() + 90) % 360));
+        } else if (e.isAltDown() && e.getKeyCode() == KeyEvent.VK_F) {
+            // Flip horizontal
+            ActionState flipAction = eventManager.getAction(ActionW.FLIP);
+            if (flipAction instanceof ToggleButtonListener) {
+                ((ToggleButtonListener) flipAction).setSelected(!((ToggleButtonListener) flipAction).isSelected());
+            }
         } else {
             Optional<ActionW> action = eventManager.getLeftMouseActionFromkeyEvent(e.getKeyCode(), e.getModifiers());
             if (action.isPresent()) {
@@ -1308,8 +1327,9 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         }
         if ((pointerType & HIGHLIGHTED_POINTER) == HIGHLIGHTED_POINTER && highlightedPosition.isHighlightedPosition()) {
             // Display the position on the center of the pixel (constant position even with a high zoom factor)
-            drawPointer(g, modelToViewX(highlightedPosition.getX() + 0.5),
-                modelToViewY(highlightedPosition.getY() + 0.5));
+            double offsetX = modelToViewLength(highlightedPosition.getX() + 0.5 - viewModel.getModelOffsetX());
+            double offsetY = modelToViewLength(highlightedPosition.getY() + 0.5 - viewModel.getModelOffsetY());
+            drawPointer(g, offsetX, offsetY);
         }
     }
 
@@ -1420,24 +1440,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
                 return;
             }
 
-            int modifiers = evt.getModifiersEx();
-            MouseActions mouseActions = eventManager.getMouseActions();
-            Optional<ActionW> action = Optional.empty();
-            // left mouse button, always active
-            if ((modifiers & InputEvent.BUTTON1_DOWN_MASK) != 0) {
-                action = eventManager.getActionFromCommand(mouseActions.getLeft());
-            }
-            // middle mouse button
-            else if ((modifiers & InputEvent.BUTTON2_DOWN_MASK) != 0
-                && ((mouseActions.getActiveButtons() & InputEvent.BUTTON2_DOWN_MASK) != 0)) {
-                action = eventManager.getActionFromCommand(mouseActions.getMiddle());
-            }
-            // right mouse button
-            else if ((modifiers & InputEvent.BUTTON3_DOWN_MASK) != 0
-                && ((mouseActions.getActiveButtons() & InputEvent.BUTTON3_DOWN_MASK) != 0)) {
-                action = eventManager.getActionFromCommand(mouseActions.getRight());
-            }
-
+            Optional<ActionW> action = eventManager.getMouseAction(evt.getModifiersEx());
             DefaultView2d.this.setCursor(action.isPresent() ? action.get().getCursor() : DefaultView2d.DEFAULT_CURSOR);
         }
 
@@ -1456,36 +1459,26 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
     public List<Action> getExportToClipboardAction() {
         List<Action> list = new ArrayList<>();
 
-        AbstractAction exportToClipboardAction = new AbstractAction(Messages.getString("DefaultView2d.clipboard")) { //$NON-NLS-1$
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
+        AbstractAction exportToClipboardAction =
+            new DefaultAction(Messages.getString("DefaultView2d.clipboard"), new ImageIcon(DefaultView2d.class.getResource("/icon/16x16/camera.png")), event -> { //$NON-NLS-1$ //$NON-NLS-2$
                 final ViewTransferHandler imageTransferHandler = new ViewTransferHandler();
                 imageTransferHandler.exportToClipboard(DefaultView2d.this,
                     Toolkit.getDefaultToolkit().getSystemClipboard(), TransferHandler.COPY);
-            }
-        };
+            });
         exportToClipboardAction.putValue(Action.ACCELERATOR_KEY,
             KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.CTRL_MASK));
         list.add(exportToClipboardAction);
 
         // TODO exclude big images?
-        exportToClipboardAction = new AbstractAction(Messages.getString("DefaultView2d.clipboard_real")) { //$NON-NLS-1$
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                final ImageTransferHandler imageTransferHandler = new ImageTransferHandler();
-                imageTransferHandler.exportToClipboard(DefaultView2d.this,
-                    Toolkit.getDefaultToolkit().getSystemClipboard(), TransferHandler.COPY);
-            }
-        };
+        exportToClipboardAction = new DefaultAction(Messages.getString("DefaultView2d.clipboard_real"), event -> { //$NON-NLS-1$
+            final ImageTransferHandler imageTransferHandler = new ImageTransferHandler();
+            imageTransferHandler.exportToClipboard(DefaultView2d.this, Toolkit.getDefaultToolkit().getSystemClipboard(),
+                TransferHandler.COPY);
+        });
         list.add(exportToClipboardAction);
 
         return list;
     }
-
-    @Override
-    public abstract void enableMouseAndKeyListener(MouseActions mouseActions);
 
     public static final AffineTransform getAffineTransform(MouseEvent mouseevent) {
         if (mouseevent != null && mouseevent.getSource() instanceof Image2DViewer) {
@@ -1496,7 +1489,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
     @Override
     public void resetZoom() {
-        ZoomType type = (ZoomType) actionsInView.get(zoomTypeCmd);
+        ZoomType type = (ZoomType) actionsInView.get(ZOOM_TYPE_CMD);
         if (!ZoomType.CURRENT.equals(type)) {
             zoom(0.0);
         }
@@ -1514,13 +1507,17 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
         if (pane != null) {
             pane.resetMaximizedSelectedImagePane(this);
         }
-
+        Object oldUnit = actionsInView.get(ActionW.SPATIAL_UNIT.cmd());
         initActionWState();
         imageLayer.fireOpEvent(new ImageOpEvent(ImageOpEvent.OpEvent.ResetDisplay, series, getImage(), null));
         resetZoom();
         resetPan();
         imageLayer.setEnableDispOperations(true);
         eventManager.updateComponentsListener(this);
+        // When pixel unit is reset
+        if (!Objects.equals(oldUnit, actionsInView.get(ActionW.SPATIAL_UNIT.cmd()))) {
+            graphicManager.updateLabels(Boolean.TRUE, this);
+        }
     }
 
     @Override
@@ -1553,7 +1550,7 @@ public abstract class DefaultView2d<E extends ImageElement> extends GraphicsPane
 
     public static Cursor getCustomCursor(String filename, String cursorName, int hotSpotX, int hotSpotY) {
         Toolkit defaultToolkit = Toolkit.getDefaultToolkit();
-        ImageIcon icon = new ImageIcon(GraphicUtil.class.getResource("/icon/cursor/" + filename)); //$NON-NLS-1$
+        ImageIcon icon = new ImageIcon(DefaultView2d.class.getResource("/icon/cursor/" + filename)); //$NON-NLS-1$
         Dimension bestCursorSize = defaultToolkit.getBestCursorSize(icon.getIconWidth(), icon.getIconHeight());
         Point hotSpot = new Point((hotSpotX * bestCursorSize.width) / icon.getIconWidth(),
             (hotSpotY * bestCursorSize.height) / icon.getIconHeight());

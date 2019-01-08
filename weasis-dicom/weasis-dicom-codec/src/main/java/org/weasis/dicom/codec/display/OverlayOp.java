@@ -1,39 +1,39 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.codec.display;
 
+import java.awt.Color;
 import java.awt.image.RenderedImage;
 import java.io.IOException;
 import java.util.HashMap;
-
-import javax.media.jai.PlanarImage;
+import java.util.Optional;
 
 import org.dcm4che3.data.Tag;
+import org.opencv.core.Mat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.core.api.gui.util.ActionW;
-import org.weasis.core.api.gui.util.JMVUtils;
 import org.weasis.core.api.image.AbstractOp;
-import org.weasis.core.api.image.CropOp;
 import org.weasis.core.api.image.ImageOpEvent;
 import org.weasis.core.api.image.ImageOpEvent.OpEvent;
-import org.weasis.core.api.image.ImageOpNode.Param;
-import org.weasis.core.api.image.MergeImgOp;
 import org.weasis.core.api.media.data.ImageElement;
 import org.weasis.core.api.media.data.TagW;
+import org.weasis.core.api.util.LangUtil;
 import org.weasis.dicom.codec.DicomMediaIO;
 import org.weasis.dicom.codec.PRSpecialElement;
-import org.weasis.dicom.codec.PresentationStateReader;
 import org.weasis.dicom.codec.TagD;
 import org.weasis.dicom.codec.utils.OverlayUtils;
+import org.weasis.opencv.data.ImageCV;
+import org.weasis.opencv.data.PlanarImage;
+import org.weasis.opencv.op.ImageProcessor;
 
 public class OverlayOp extends AbstractOp {
     private static final Logger LOGGER = LoggerFactory.getLogger(OverlayOp.class);
@@ -56,6 +56,7 @@ public class OverlayOp extends AbstractOp {
     public OverlayOp copy() {
         return new OverlayOp(this);
     }
+
     @Override
     public void handleImageOpEvent(ImageOpEvent event) {
         OpEvent type = event.getEventType();
@@ -65,10 +66,8 @@ public class OverlayOp extends AbstractOp {
         } else if (OpEvent.ApplyPR.equals(type)) {
             HashMap<String, Object> p = event.getParams();
             if (p != null) {
-                Object prReader = p.get(ActionW.PR_STATE.cmd());
-                PRSpecialElement pr = (prReader instanceof PresentationStateReader)
-                    ? ((PresentationStateReader) prReader).getDicom() : null;
-                setParam(P_PR_ELEMENT, pr);
+                setParam(P_PR_ELEMENT, Optional.ofNullable(p.get(ActionW.PR_STATE.cmd()))
+                    .filter(PRSpecialElement.class::isInstance).orElse(null));
                 setParam(P_IMAGE_ELEMENT, event.getImage());
             }
         }
@@ -76,18 +75,16 @@ public class OverlayOp extends AbstractOp {
 
     @Override
     public void process() throws Exception {
-        RenderedImage source = (RenderedImage) params.get(Param.INPUT_IMG);
-        RenderedImage result = source;
+        PlanarImage source = (PlanarImage) params.get(Param.INPUT_IMG);
+        PlanarImage result = source;
         Boolean overlay = (Boolean) params.get(P_SHOW);
 
-        if (overlay == null) {
-            LOGGER.warn("Cannot apply \"{}\" because a parameter is null", OP_NAME); //$NON-NLS-1$
-        } else if (overlay) {
+        if (overlay != null && overlay) {
             RenderedImage imgOverlay = null;
             ImageElement image = (ImageElement) params.get(P_IMAGE_ELEMENT);
 
             if (image != null) {
-                boolean overlays = JMVUtils.getNULLtoFalse(image.getTagValue(TagW.HasOverlay));
+                boolean overlays = LangUtil.getNULLtoFalse((Boolean) image.getTagValue(TagW.HasOverlay));
 
                 if (overlays && image.getMediaReader() instanceof DicomMediaIO) {
                     DicomMediaIO reader = (DicomMediaIO) image.getMediaReader();
@@ -97,18 +94,17 @@ public class OverlayOp extends AbstractOp {
                             Integer height = TagD.getTagValue(image, Tag.Rows, Integer.class);
                             Integer width = TagD.getTagValue(image, Tag.Columns, Integer.class);
                             if (height != null && width != null) {
-                                imgOverlay = PlanarImage.wrapRenderedImage(OverlayUtils.getBinaryOverlays(image,
-                                    reader.getDicomObject(), frame, width, height, params));
+                                imgOverlay = OverlayUtils.getBinaryOverlays(image, reader.getDicomObject(), frame,
+                                    width, height, params);
                             }
                         }
                     } catch (IOException e) {
-                        LOGGER.error("Applying overlays: {}", e.getMessage()); //$NON-NLS-1$
+                        LOGGER.error("Applying overlays", e); //$NON-NLS-1$
                     }
                 }
             }
-            result = imgOverlay == null ? source : MergeImgOp.combineTwoImages(source, imgOverlay, 255);
+            result = imgOverlay == null ? source : ImageProcessor.overlay(source.toMat(), imgOverlay, Color.WHITE);
         }
-
         params.put(Param.OUTPUT_IMG, result);
     }
 }

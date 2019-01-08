@@ -1,29 +1,24 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse  License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.media.data;
-
-import java.util.Comparator;
 
 public interface MediaSeriesGroup extends Tagable {
 
     TagW getTagID();
 
-    TagW getTagElement(int id);
+    boolean matchIdValue(Object valueID);
 
-    @Override
-    boolean equals(Object obj);
+    TagW getTagElement(int id);
 
     void dispose();
 
-    void setComparator(Comparator<TagW> comparator);
-
-    Comparator<TagW> getComparator();
+    void addMergeIdValue(Object valueID);
 }

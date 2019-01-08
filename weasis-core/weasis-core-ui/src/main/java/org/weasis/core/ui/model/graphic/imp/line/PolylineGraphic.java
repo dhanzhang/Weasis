@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic.imp.line;
 
 import java.awt.Shape;
@@ -33,23 +43,11 @@ public class PolylineGraphic extends AbstractDragGraphic {
 
     public static final Icon ICON = new ImageIcon(PolylineGraphic.class.getResource("/icon/22x22/draw-polyline.png")); //$NON-NLS-1$
 
-    public static final Measurement FIRST_POINT_X =
-        new Measurement(Messages.getString("measure.firstx"), 1, true, true, false); //$NON-NLS-1$
-    public static final Measurement FIRST_POINT_Y =
-        new Measurement(Messages.getString("measure.firsty"), 2, true, true, false); //$NON-NLS-1$
-    public static final Measurement LAST_POINT_X =
-        new Measurement(Messages.getString("measure.lastx"), 3, true, true, false); //$NON-NLS-1$
-    public static final Measurement LAST_POINT_Y =
-        new Measurement(Messages.getString("measure.lasty"), 4, true, true, false); //$NON-NLS-1$
     public static final Measurement LINE_LENGTH =
         new Measurement(Messages.getString("measure.length"), 5, true, true, true); //$NON-NLS-1$
 
     protected static final List<Measurement> MEASUREMENT_LIST = new ArrayList<>();
     static {
-        MEASUREMENT_LIST.add(FIRST_POINT_X);
-        MEASUREMENT_LIST.add(FIRST_POINT_Y);
-        MEASUREMENT_LIST.add(LAST_POINT_X);
-        MEASUREMENT_LIST.add(LAST_POINT_Y);
         MEASUREMENT_LIST.add(LINE_LENGTH);
     }
 
@@ -73,7 +71,7 @@ public class PolylineGraphic extends AbstractDragGraphic {
 
     @Override
     public String getUIName() {
-        return Messages.getString("MeasureToolBar.polygon"); //$NON-NLS-1$
+        return Messages.getString("MeasureToolBar.polyline"); //$NON-NLS-1$
     }
 
     @Override
@@ -162,37 +160,7 @@ public class PolylineGraphic extends AbstractDragGraphic {
                         handlePointListcopy.add((Point2D.Double) handlePt.clone());
                     }
                 }
-                Point2D ptA = null;
-                Point2D ptB = null;
 
-                if (FIRST_POINT_X.getComputed()) {
-                    if (!handlePointListcopy.isEmpty()) {
-                        ptA = handlePointListcopy.get(0);
-                    }
-                    measVal.add(
-                        new MeasureItem(FIRST_POINT_X, adapter.getXCalibratedValue(ptA.getX()), adapter.getUnit()));
-                }
-                if (FIRST_POINT_Y.getComputed()) {
-                    if (!handlePointListcopy.isEmpty()) {
-                        ptA = handlePointListcopy.get(0);
-                    }
-                    measVal.add(
-                        new MeasureItem(FIRST_POINT_Y, adapter.getXCalibratedValue(ptA.getY()), adapter.getUnit()));
-                }
-                if (LAST_POINT_X.getComputed()) {
-                    if (!handlePointListcopy.isEmpty()) {
-                        ptB = handlePointListcopy.get(pts.size() - 1);
-                    }
-                    measVal
-                        .add(new MeasureItem(LAST_POINT_X, adapter.getXCalibratedValue(ptB.getX()), adapter.getUnit()));
-                }
-                if (LAST_POINT_Y.getComputed()) {
-                    if (!handlePointListcopy.isEmpty()) {
-                        ptB = handlePointListcopy.get(pts.size() - 1);
-                    }
-                    measVal
-                        .add(new MeasureItem(LAST_POINT_Y, adapter.getXCalibratedValue(ptB.getY()), adapter.getUnit()));
-                }
                 if (LINE_LENGTH.getComputed()) {
                     Double val = (handlePointListcopy.size() > 1) ? getPerimeter(handlePointListcopy) * ratio : null;
                     measVal.add(new MeasureItem(LINE_LENGTH, val, unitStr));
@@ -210,7 +178,7 @@ public class PolylineGraphic extends AbstractDragGraphic {
 
     protected Double getPerimeter(List<Point2D.Double> handlePointList) {
         if (handlePointList.size() > 1) {
-            Double perimeter = 0d;
+            double perimeter = 0d;
             Point2D.Double pLast = handlePointList.get(0);
             for (Point2D.Double p2 : handlePointList) {
                 perimeter += pLast.distance(p2);

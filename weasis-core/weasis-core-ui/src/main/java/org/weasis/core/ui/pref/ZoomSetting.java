@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.pref;
 
 import java.awt.Color;
@@ -42,7 +42,6 @@ public class ZoomSetting {
         if (prefs != null) {
             Preferences p = prefs.node(ZoomSetting.PREFERENCE_NODE);
             BundlePreferences.putIntPreferences(p, "interpolation", interpolation); //$NON-NLS-1$
-
         }
     }
 

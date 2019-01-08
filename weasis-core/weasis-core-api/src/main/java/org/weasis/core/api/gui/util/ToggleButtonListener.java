@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.util;
 
 import java.awt.event.ActionEvent;
@@ -53,7 +53,7 @@ public abstract class ToggleButtonListener extends BasicActionState implements A
             actionPerformed(model.isSelected());
             AuditLog.LOGGER.info("action:{} val:{}", action.cmd(), model.isSelected()); //$NON-NLS-1$
         }
-    };
+    }
 
     public abstract void actionPerformed(boolean selected);
 
@@ -70,7 +70,7 @@ public abstract class ToggleButtonListener extends BasicActionState implements A
         }
     }
 
-    public boolean isSelected() {
+    public synchronized boolean isSelected() {
         return model.isSelected();
     }
 

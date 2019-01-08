@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.model.utils.bean;
 
 import java.util.Objects;
@@ -23,7 +23,7 @@ public class MeasureItem {
     }
 
     public MeasureItem(Measurement measurement, String labelExtension, Object value, String unit) {
-        this.measurement = Objects.requireNonNull(measurement, "Measurement cannot be null!");
+        this.measurement = Objects.requireNonNull(measurement, "Measurement cannot be null!"); //$NON-NLS-1$
         this.value = value;
         this.unit = unit;
         this.labelExtension = labelExtension;

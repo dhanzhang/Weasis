@@ -1,28 +1,20 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.viewer2d.mpr;
 
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.geom.Point2D;
-import java.awt.image.BufferedImage;
-import java.awt.image.ColorModel;
-import java.awt.image.DataBuffer;
-import java.awt.image.DataBufferByte;
-import java.awt.image.DataBufferInt;
-import java.awt.image.DataBufferShort;
-import java.awt.image.DataBufferUShort;
-import java.awt.image.RenderedImage;
-import java.awt.image.SampleModel;
-import java.awt.image.WritableRaster;
-import java.awt.image.renderable.ParameterBlock;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.IntBuffer;
-import java.nio.ShortBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -30,26 +22,19 @@ import java.util.List;
 import java.util.Map;
 
 import javax.imageio.IIOException;
-import javax.media.jai.Interpolation;
-import javax.media.jai.JAI;
-import javax.media.jai.PlanarImage;
-import javax.media.jai.RasterFactory;
-import javax.media.jai.RenderedOp;
-import javax.media.jai.operator.TransposeDescriptor;
-import javax.media.jai.operator.TransposeType;
 import javax.swing.JOptionPane;
 import javax.swing.JProgressBar;
 import javax.vecmath.Point3d;
 import javax.vecmath.Vector3d;
 
 import org.dcm4che3.data.Attributes;
-import org.dcm4che3.data.Attributes.Visitor;
 import org.dcm4che3.data.Tag;
-import org.dcm4che3.data.UID;
 import org.dcm4che3.data.VR;
-import org.dcm4che3.image.PhotometricInterpretation;
-import org.dcm4che3.util.TagUtils;
 import org.dcm4che3.util.UIDUtils;
+import org.opencv.core.Core;
+import org.opencv.imgproc.Imgproc;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.weasis.core.api.explorer.ObservableEvent;
 import org.weasis.core.api.explorer.model.DataExplorerModel;
 import org.weasis.core.api.explorer.model.TreeModel;
@@ -58,10 +43,10 @@ import org.weasis.core.api.gui.util.AppProperties;
 import org.weasis.core.api.gui.util.Filter;
 import org.weasis.core.api.gui.util.GuiExecutor;
 import org.weasis.core.api.gui.util.MathUtil;
-import org.weasis.core.api.image.util.ImageToolkit;
 import org.weasis.core.api.media.data.MediaSeries;
 import org.weasis.core.api.media.data.MediaSeriesGroup;
 import org.weasis.core.api.media.data.TagW;
+import org.weasis.core.api.media.data.TagW.TagType;
 import org.weasis.core.api.util.FileUtil;
 import org.weasis.dicom.codec.DcmMediaReader;
 import org.weasis.dicom.codec.DicomImageElement;
@@ -72,10 +57,16 @@ import org.weasis.dicom.codec.geometry.GeometryOfSlice;
 import org.weasis.dicom.codec.utils.DicomMediaUtils;
 import org.weasis.dicom.explorer.DicomModel;
 import org.weasis.dicom.viewer2d.Messages;
-import org.weasis.dicom.viewer2d.RawImage;
 import org.weasis.dicom.viewer2d.mpr.MprView.SliceOrientation;
+import org.weasis.opencv.data.FileRawImage;
+import org.weasis.opencv.data.ImageCV;
+import org.weasis.opencv.data.PlanarImage;
+import org.weasis.opencv.op.ImageProcessor;
 
 public class SeriesBuilder {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SeriesBuilder.class);
+
+    static TagW SeriesReferences = new TagW("series.builder.refs", TagType.STRING, 2, 2); //$NON-NLS-1$
     public static final File MPR_CACHE_DIR =
         AppProperties.buildAccessibleTempDirectory(AppProperties.FILE_CACHE_DIR.getName(), "mpr"); //$NON-NLS-1$
 
@@ -105,7 +96,7 @@ public class SeriesBuilder {
                         // abort needs to be final array to be changed on "invoqueAndWhait()" block.
                         final boolean[] abort = new boolean[] { false, false };
 
-                        if (img.getRescaleX() != img.getRescaleY()) {
+                        if (MathUtil.isDifferent(img.getRescaleX(), img.getRescaleY())) {
                             // confirmMessage(view, Messages.getString("SeriesBuilder.non_square"), abort);
                             // //$NON-NLS-1$
                             width = img.getRescaleWidth(width);
@@ -132,38 +123,50 @@ public class SeriesBuilder {
                                 series.setTag(TagD.get(Tag.FrameOfReferenceUID), frUID);
                             }
 
+                            final String uid1;
+                            final String uid2;
+                            String[] uidsRef = TagW.getTagValue(series, SeriesReferences, String[].class);
+                            if (uidsRef != null && uidsRef.length == 2) {
+                                uid1 = uidsRef[0];
+                                uid2 = uidsRef[1];
+                            } else {
+                                uid1 = UIDUtils.createUID();
+                                uid2 = UIDUtils.createUID();
+                                series.setTag(SeriesReferences, new String[] { uid1, uid2 });
+                            }
+
                             if (SliceOrientation.SAGITTAL.equals(type1)) {
-                                // The reference image is the first of the saggital stack (Left)
+                                // The reference image is the first of the sagittal stack (Left)
                                 rotate(vc, vr, Math.toRadians(270), resr);
-                                recParams[0] = new ViewParameter(".2", SliceOrientation.AXIAL, false, null, //$NON-NLS-1$
+                                recParams[0] = new ViewParameter(uid1, SliceOrientation.AXIAL, false, -1,
                                     new double[] { resr.x, resr.y, resr.z, row[0], row[1], row[2] }, true, true,
                                     new Object[] { 0.0, false }, frUID);
-                                recParams[1] = new ViewParameter(".3", SliceOrientation.CORONAL, false, //$NON-NLS-1$
-                                    TransposeDescriptor.ROTATE_270,
+                                recParams[1] = new ViewParameter(uid2, SliceOrientation.CORONAL, false,
+                                    Core.ROTATE_90_COUNTERCLOCKWISE,
                                     new double[] { resr.x, resr.y, resr.z, col[0], col[1], col[2] }, true, true,
                                     new Object[] { true, 0.0 }, frUID);
                             } else if (SliceOrientation.CORONAL.equals(type1)) {
                                 // The reference image is the first of the coronal stack (Anterior)
                                 rotate(vc, vr, Math.toRadians(90), resc);
-                                recParams[0] = new ViewParameter(".2", SliceOrientation.AXIAL, false, null, //$NON-NLS-1$
+                                recParams[0] = new ViewParameter(uid1, SliceOrientation.AXIAL, false, -1,
                                     new double[] { row[0], row[1], row[2], resc.x, resc.y, resc.z }, false, true,
                                     new Object[] { 0.0, false }, frUID);
 
                                 rotate(vc, vr, Math.toRadians(90), resr);
-                                recParams[1] = new ViewParameter(".3", SliceOrientation.SAGITTAL, true, //$NON-NLS-1$
-                                    TransposeDescriptor.ROTATE_270,
+                                recParams[1] = new ViewParameter(uid2, SliceOrientation.SAGITTAL, true,
+                                    Core.ROTATE_90_COUNTERCLOCKWISE,
                                     new double[] { resr.x, resr.y, resr.z, col[0], col[1], col[2] }, true, false,
                                     new Object[] { true, 0.0 }, frUID);
                             } else {
                                 // The reference image is the last of the axial stack (Head)
                                 rotate(vc, vr, Math.toRadians(270), resc);
-                                recParams[0] = new ViewParameter(".2", SliceOrientation.CORONAL, true, null, //$NON-NLS-1$
+                                recParams[0] = new ViewParameter(uid1, SliceOrientation.CORONAL, true, -1,
                                     new double[] { row[0], row[1], row[2], resc.x, resc.y, resc.z }, false, false,
                                     new Object[] { 0.0, false }, frUID);
 
                                 rotate(vr, vc, Math.toRadians(90), resr);
-                                recParams[1] = new ViewParameter(".3", SliceOrientation.SAGITTAL, true, //$NON-NLS-1$
-                                    TransposeDescriptor.ROTATE_270,
+                                recParams[1] = new ViewParameter(uid2, SliceOrientation.SAGITTAL, true,
+                                    Core.ROTATE_90_COUNTERCLOCKWISE,
                                     new double[] { col[0], col[1], col[2], resr.x, resr.y, resr.z }, false, false,
                                     new Object[] { true, 0.0 }, frUID);
 
@@ -189,24 +192,20 @@ public class SeriesBuilder {
                                 if (study != null) {
                                     for (int i = 0; i < 2; i++) {
                                         final MediaSeriesGroup group =
-                                            treeModel.getHierarchyNode(study, seriesID + recParams[i].suffix);
+                                            treeModel.getHierarchyNode(study, recParams[i].seriesUID);
                                         needBuild[i] = group == null;
                                         if (!needBuild[i]) {
                                             final MprView mprView = recView[i];
-                                            GuiExecutor.instance().execute(new Runnable() {
-
-                                                @Override
-                                                public void run() {
-                                                    mprView.setSeries((MediaSeries<DicomImageElement>) group);
-                                                    // Copy the synch values from the main view
-                                                    for (String action : MPRContainer.DEFAULT_MPR.getSynchData()
-                                                        .getActions().keySet()) {
-                                                        mprView.setActionsInView(action, view.getActionValue(action));
-                                                    }
-                                                    mprView.zoom(mainView.getViewModel().getViewScale());
-                                                    mprView.center();
-                                                    mprView.repaint();
+                                            GuiExecutor.instance().execute(() -> {
+                                                mprView.setSeries((MediaSeries<DicomImageElement>) group);
+                                                // Copy the synch values from the main view
+                                                for (String action : MPRContainer.DEFAULT_MPR.getSynchData()
+                                                    .getActions().keySet()) {
+                                                    mprView.setActionsInView(action, view.getActionValue(action));
                                                 }
+                                                mprView.zoom(mainView.getViewModel().getViewScale());
+                                                mprView.center();
+                                                mprView.repaint();
                                             });
                                         }
                                     }
@@ -215,22 +214,18 @@ public class SeriesBuilder {
 
                             final int size = series.size(filter);
                             final JProgressBar[] bar = new JProgressBar[2];
-                            GuiExecutor.instance().invokeAndWait(new Runnable() {
-
-                                @Override
-                                public void run() {
-                                    for (int i = 0; i < 2; i++) {
-                                        if (needBuild[i]) {
-                                            bar[i] = new JProgressBar(0, size);
-                                            Dimension dim = new Dimension(recView[i].getWidth() / 2, 30);
-                                            bar[i].setSize(dim);
-                                            bar[i].setPreferredSize(dim);
-                                            bar[i].setMaximumSize(dim);
-                                            bar[i].setValue(0);
-                                            bar[i].setStringPainted(true);
-                                            recView[i].setProgressBar(bar[i]);
-                                            recView[i].repaint();
-                                        }
+                            GuiExecutor.instance().invokeAndWait(() -> {
+                                for (int i = 0; i < 2; i++) {
+                                    if (needBuild[i]) {
+                                        bar[i] = new JProgressBar(0, size);
+                                        Dimension dim = new Dimension(recView[i].getWidth() / 2, 30);
+                                        bar[i].setSize(dim);
+                                        bar[i].setPreferredSize(dim);
+                                        bar[i].setMaximumSize(dim);
+                                        bar[i].setValue(0);
+                                        bar[i].setStringPainted(true);
+                                        recView[i].setProgressBar(bar[i]);
+                                        recView[i].repaint();
                                     }
                                 }
                             });
@@ -251,13 +246,13 @@ public class SeriesBuilder {
                                             : SortSeriesStack.slicePosition);
                                     double origPixSize = img.getPixelSize();
 
-                                    RawImage[] secSeries = new RawImage[i == 0 ? height : width];
+                                    FileRawImage[] secSeries = new FileRawImage[i == 0 ? height : width];
                                     /*
                                      * Write the new image by tacking the lines (from first to last) of all the images
                                      * of the original series stack
                                      */
                                     double sPixSize = writeBlock(secSeries, series, medias, viewParams, mprView, thread,
-                                        abort, seriesID);
+                                        abort, seriesID, size);
 
                                     if (thread.isInterrupted()) {
                                         return;
@@ -266,9 +261,9 @@ public class SeriesBuilder {
                                      * Reconstruct dicom files, adapt position, orientation, pixel spacing, instance
                                      * number and UIDs.
                                      */
-                                    final DicomSeries dicomSeries = buildDicomSeriesFromRaw(secSeries,
-                                        new Dimension(i == 0 ? width : height, size), img, viewParams, seriesID,
-                                        origPixSize, sPixSize, geometry, mprView, attributes);
+                                    final DicomSeries dicomSeries =
+                                        buildDicomSeriesFromRaw(secSeries, new Dimension(i == 0 ? width : height, size),
+                                            img, viewParams, origPixSize, sPixSize, geometry, mprView, attributes);
 
                                     if (dicomSeries != null && dicomSeries.size(null) > 0) {
                                         ((DcmMediaReader) dicomSeries.getMedia(0, null, null).getMediaReader())
@@ -279,25 +274,21 @@ public class SeriesBuilder {
                                             if (treeModel instanceof DicomModel) {
                                                 DicomModel dicomModel = (DicomModel) treeModel;
                                                 dicomModel.firePropertyChange(new ObservableEvent(
-                                                    ObservableEvent.BasicAction.Add, dicomModel, null, dicomSeries));
+                                                    ObservableEvent.BasicAction.ADD, dicomModel, null, dicomSeries));
                                             }
                                         }
 
-                                        GuiExecutor.instance().execute(new Runnable() {
-
-                                            @Override
-                                            public void run() {
-                                                mprView.setProgressBar(null);
-                                                mprView.setSeries(dicomSeries);
-                                                // Copy the synch values from the main view
-                                                for (String action : MPRContainer.DEFAULT_MPR.getSynchData()
-                                                    .getActions().keySet()) {
-                                                    mprView.setActionsInView(action, view.getActionValue(action));
-                                                }
-                                                mprView.zoom(mainView.getViewModel().getViewScale());
-                                                mprView.center();
-                                                mprView.repaint();
+                                        GuiExecutor.instance().execute(() -> {
+                                            mprView.setProgressBar(null);
+                                            mprView.setSeries(dicomSeries);
+                                            // Copy the synch values from the main view
+                                            for (String action : MPRContainer.DEFAULT_MPR.getSynchData().getActions()
+                                                .keySet()) {
+                                                mprView.setActionsInView(action, view.getActionValue(action));
                                             }
+                                            mprView.zoom(mainView.getViewModel().getViewScale());
+                                            mprView.center();
+                                            mprView.repaint();
                                         });
                                     }
                                 }
@@ -309,56 +300,33 @@ public class SeriesBuilder {
         }
     }
 
-    private static DicomSeries buildDicomSeriesFromRaw(final RawImage[] newSeries, Dimension dim, DicomImageElement img,
-        ViewParameter params, String seriesID, double origPixSize, double sPixSize, GeometryOfSlice geometry,
+    private static DicomSeries buildDicomSeriesFromRaw(final FileRawImage[] newSeries, Dimension dim,
+        DicomImageElement img, ViewParameter params, double origPixSize, double sPixSize, GeometryOfSlice geometry,
         final MprView view, final Attributes attributes) throws Exception {
 
-        String recSeriesID = seriesID + params.suffix;
         int bitsAllocated = img.getBitsAllocated();
         int bitsStored = img.getBitsStored();
         double[] pixSpacing = new double[] { sPixSize, origPixSize };
 
-        int dataType = 0;
-        ColorModel cm = null;
-        SampleModel sampleModel = null;
         final JProgressBar bar = view.getProgressBar();
 
         if (params.rotateOutputImg) {
             if (bar != null) {
-                GuiExecutor.instance().execute(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        bar.setMaximum(newSeries.length);
-                        bar.setValue(0);
-                        // Force to reset the progress bar (substance)
-                        bar.updateUI();
-                        view.repaint();
-                    }
+                GuiExecutor.instance().execute(() -> {
+                    bar.setMaximum(newSeries.length);
+                    bar.setValue(0);
+                    // Force to reset the progress bar (substance)
+                    bar.updateUI();
+                    view.repaint();
                 });
             }
 
             pixSpacing = new double[] { origPixSize, sPixSize };
 
-            int samplesPerPixel = TagD.getTagValue(img, Tag.SamplesPerPixel, Integer.class);
-            boolean banded = samplesPerPixel > 1
-                && DicomMediaUtils.getIntegerFromDicomElement(attributes, Tag.PlanarConfiguration, 0) != 0;
-            int pixelRepresentation =
-                DicomMediaUtils.getIntegerFromDicomElement(attributes, Tag.PixelRepresentation, 0);
-            dataType = bitsAllocated <= 8 ? DataBuffer.TYPE_BYTE
-                : pixelRepresentation != 0 ? DataBuffer.TYPE_SHORT : DataBuffer.TYPE_USHORT;
-            if (bitsAllocated > 16 && samplesPerPixel == 1) {
-                dataType = DataBuffer.TYPE_INT;
-            }
-
-            String photometricInterpretation = TagD.getTagValue(img, Tag.PhotometricInterpretation, String.class);
-            PhotometricInterpretation pmi = PhotometricInterpretation.fromString(photometricInterpretation);
-            cm = pmi.createColorModel(bitsStored, dataType, attributes);
-            sampleModel = pmi.createSampleModel(dataType, dim.width, dim.height, samplesPerPixel, banded);
-
             int tmp = dim.width;
             dim.width = dim.height;
             dim.height = tmp;
+
         }
 
         final int[] COPIED_ATTRS = { Tag.SpecificCharacterSet, Tag.PatientID, Tag.PatientName, Tag.PatientBirthDate,
@@ -383,93 +351,30 @@ public class SeriesBuilder {
         List<DicomImageElement> dcms = new ArrayList<>();
 
         for (int i = 0; i < newSeries.length; i++) {
-            File inFile = newSeries[i].getFile();
             if (params.rotateOutputImg) {
-
-                ByteBuffer byteBuffer = getBytesFromFile(inFile);
-                DataBuffer dataBuffer = null;
-                if (dataType == DataBuffer.TYPE_BYTE) {
-                    dataBuffer = new DataBufferByte(byteBuffer.array(), byteBuffer.limit());
-                } else if (dataType <= DataBuffer.TYPE_SHORT) {
-                    ShortBuffer sBuffer = byteBuffer.asShortBuffer();
-                    short[] data;
-                    if (sBuffer.hasArray()) {
-                        data = sBuffer.array();
-                    } else {
-                        data = new short[byteBuffer.limit() / 2];
-                        for (int k = 0; k < data.length; k++) {
-                            if (byteBuffer.hasRemaining()) {
-                                data[k] = byteBuffer.getShort();
-                            }
-                        }
-                    }
-                    dataBuffer = dataType == DataBuffer.TYPE_SHORT ? new DataBufferShort(data, data.length)
-                        : new DataBufferUShort(data, data.length);
-                } else if (dataType == DataBuffer.TYPE_INT) {
-                    IntBuffer sBuffer = byteBuffer.asIntBuffer();
-                    int[] data;
-                    if (sBuffer.hasArray()) {
-                        data = sBuffer.array();
-                    } else {
-                        data = new int[byteBuffer.limit() / 4];
-                        for (int k = 0; k < data.length; k++) {
-                            if (byteBuffer.hasRemaining()) {
-                                data[k] = byteBuffer.getInt();
-                            }
-                        }
-                    }
-                    dataBuffer = new DataBufferInt(data, data.length);
+                try {
+                    newSeries[i].write(ImageProcessor.getRotatedImage(newSeries[i].read(), Core.ROTATE_90_CLOCKWISE));
+                } catch (Exception e) {
+                    FileUtil.delete(newSeries[i].getFile());
+                    throw e;
                 }
-
-                WritableRaster raster = RasterFactory.createWritableRaster(sampleModel, dataBuffer, null);
-                BufferedImage bufImg = new BufferedImage(cm, raster, false, null);
-                bufImg = getImage(bufImg, TransposeDescriptor.ROTATE_90);
-
-                dataBuffer = bufImg.getRaster().getDataBuffer();
-                if (dataBuffer instanceof DataBufferByte) {
-                    byteBuffer = ByteBuffer.wrap(((DataBufferByte) dataBuffer).getData());
-                    writToFile(inFile, byteBuffer);
-                } else if (dataBuffer instanceof DataBufferShort || dataBuffer instanceof DataBufferUShort) {
-                    short[] data = dataBuffer instanceof DataBufferShort ? ((DataBufferShort) dataBuffer).getData()
-                        : ((DataBufferUShort) dataBuffer).getData();
-
-                    byteBuffer = ByteBuffer.allocate(data.length * 2);
-                    byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-                    ShortBuffer shortBuffer = byteBuffer.asShortBuffer();
-                    shortBuffer.put(data);
-
-                    writToFile(inFile, byteBuffer);
-                } else if (dataBuffer instanceof DataBufferInt) {
-                    int[] data = ((DataBufferInt) dataBuffer).getData();
-
-                    byteBuffer = ByteBuffer.allocate(data.length * 4);
-                    byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-                    IntBuffer intBuffer = byteBuffer.asIntBuffer();
-                    intBuffer.put(data);
-
-                    writToFile(inFile, byteBuffer);
-                }
+                
                 if (bar != null) {
-                    GuiExecutor.instance().execute(new Runnable() {
-
-                        @Override
-                        public void run() {
-                            bar.setValue(bar.getValue() + 1);
-                            view.repaint();
-                        }
+                    GuiExecutor.instance().execute(() -> {
+                        bar.setValue(bar.getValue() + 1);
+                        view.repaint();
                     });
                 }
             }
-            RawImageIO rawIO = new RawImageIO(inFile.toURI(), null);
+            RawImageIO rawIO = new RawImageIO(newSeries[i], null);
             rawIO.setBaseAttributes(cpTags);
 
             // Tags with same values for all the Series
-            rawIO.setTag(TagD.get(Tag.TransferSyntaxUID), UID.ImplicitVRLittleEndian);
             rawIO.setTag(TagD.get(Tag.Columns), dim.width);
             rawIO.setTag(TagD.get(Tag.Rows), dim.height);
             rawIO.setTag(TagD.get(Tag.SliceThickness), origPixSize);
             rawIO.setTag(TagD.get(Tag.PixelSpacing), pixSpacing);
-            rawIO.setTag(TagD.get(Tag.SeriesInstanceUID), recSeriesID);
+            rawIO.setTag(TagD.get(Tag.SeriesInstanceUID), params.seriesUID);
             rawIO.setTag(TagD.get(Tag.ImageOrientationPatient), params.imgOrientation);
 
             rawIO.setTag(TagD.get(Tag.BitsAllocated), bitsAllocated);
@@ -531,21 +436,18 @@ public class SeriesBuilder {
             };
             dcms.add(dcm);
         }
-        return new DicomSeries(recSeriesID, dcms, DicomModel.series.getTagView());
+        return new DicomSeries(params.seriesUID, dcms, DicomModel.series.getTagView());
     }
 
-    private static double writeBlock(RawImage[] newSeries, MediaSeries<DicomImageElement> series,
+    private static double writeBlock(FileRawImage[] newSeries, MediaSeries<DicomImageElement> series,
         Iterable<DicomImageElement> medias, ViewParameter params, final MprView view, Thread thread,
-        final boolean[] abort, String seriesID) throws IOException {
-
+        final boolean[] abort, String seriesID, int dstHeight) throws IOException {
+        ImageCV[] builImgs = new ImageCV[newSeries.length];
+        
         // TODO should return the more frequent space!
         final JProgressBar bar = view.getProgressBar();
         try {
-            File dir = new File(MPR_CACHE_DIR, seriesID + params.suffix);
-            dir.mkdirs();
-            for (int i = 0; i < newSeries.length; i++) {
-                newSeries[i] = new RawImage(new File(dir, "mpr_" + (i + 1)));//$NON-NLS-1$
-            }
+
             double epsilon = 1e-3;
             double lastPos = 0.0;
             double lastSpace = 0.0;
@@ -557,13 +459,15 @@ public class SeriesBuilder {
                 }
                 DicomImageElement dcm = iter.next();
                 double[] sp = (double[]) dcm.getTagValue(TagW.SlicePosition);
-                if (sp == null && !abort[1]) {
+                boolean validSp = sp != null && sp.length == 3;
+                if (!validSp && !abort[1]) {
                     confirmMessage(view, Messages.getString("SeriesBuilder.space_missing"), abort); //$NON-NLS-1$
-                } else {
-                    double pos = (sp[0] + sp[1] + sp[2]);
+                } else if (validSp) {
+                    double pos = sp[0] + sp[1] + sp[2];
                     if (index > 0) {
                         double space = Math.abs(pos - lastPos);
-                        if (!abort[1] && (space == 0.0 || (index > 1 && lastSpace - space > epsilon))) {
+                        if (!abort[1]
+                            && (MathUtil.isEqualToZero(space) || (index > 1 && lastSpace - space > epsilon))) {
                             confirmMessage(view, Messages.getString("SeriesBuilder.space"), abort); //$NON-NLS-1$
                         }
                         lastSpace = space;
@@ -571,125 +475,65 @@ public class SeriesBuilder {
                     lastPos = pos;
                     index++;
                     if (bar != null) {
-                        GuiExecutor.instance().execute(new Runnable() {
-
-                            @Override
-                            public void run() {
-                                bar.setValue(bar.getValue() + 1);
-                                view.repaint();
-                            }
+                        GuiExecutor.instance().execute(() -> {
+                            bar.setValue(bar.getValue() + 1);
+                            view.repaint();
                         });
                     }
                 }
-                // TODO do not open more than 512 files (Limitation to open 1024 in the same
-                // time on Ubuntu)
-                PlanarImage image = dcm.getImage();
+                
+                // TODO do not open more than 512 files (Limitation to open 1024 in the same time on Ubuntu)
+                PlanarImage image = dcm.getImage(null, false);
                 if (image == null) {
                     abort[0] = true;
                     throw new IIOException("Cannot read an image!"); //$NON-NLS-1$
                 }
-
-                if (dcm.getRescaleX() != dcm.getRescaleY()) {
-                    ParameterBlock pb = new ParameterBlock();
-                    pb.addSource(image);
-                    pb.add((float) dcm.getRescaleX()).add((float) dcm.getRescaleY()).add(0.0f).add(0.0f);
-                    pb.add(Interpolation.getInstance(Interpolation.INTERP_BILINEAR));
-                    image = JAI.create("scale", pb, ImageToolkit.NOCACHE_HINT); //$NON-NLS-1$
+                if (MathUtil.isDifferent(dcm.getRescaleX(), dcm.getRescaleY())) {
+                    Dimension dim = new Dimension((int) (Math.abs(dcm.getRescaleX()) * image.width()),
+                        (int) (Math.abs(dcm.getRescaleY()) * image.height()));
+                    image = ImageProcessor.scale(image.toImageCV(), dim, Imgproc.INTER_LINEAR);
                 }
-                writeRasterInRaw(getImage(image, params.transposeImage), newSeries);
+
+                writeRasterInRaw(image, newSeries, builImgs, params, dstHeight, index);
             }
+            
+
             return lastSpace;
         } finally {
             for (int i = 0; i < newSeries.length; i++) {
                 if (newSeries[i] != null) {
-                    newSeries[i].disposeOutputStream();
                     if (abort[0]) {
                         newSeries[i].getFile().delete();
+                    } else {
+                        newSeries[i].write(builImgs[i]);
                     }
+                    builImgs[i].release();
                 }
             }
         }
     }
 
-    private static void writeRasterInRaw(BufferedImage image, RawImage[] newSeries) throws IOException {
-        if (newSeries != null && image != null && image.getHeight() == newSeries.length) {
+    private static void writeRasterInRaw(PlanarImage image, FileRawImage[] newSeries, ImageCV[] builImgs,
+        ViewParameter params, int dstHeight, int imgIndex) throws IOException {
+        ImageCV img = ImageProcessor.getRotatedImage(image.toMat(), params.rotateCvType);
+        if (newSeries != null && img != null && img.height() == newSeries.length) {
 
-            DataBuffer dataBuffer = image.getRaster().getDataBuffer();
-            int width = image.getWidth();
-            int height = newSeries.length;
-            byte[] bytesOut = null;
-            if (dataBuffer instanceof DataBufferByte) {
-                bytesOut = ((DataBufferByte) dataBuffer).getData();
-                for (int j = 0; j < height; j++) {
-                    newSeries[j].getOutputStream().write(bytesOut, j * width, width);
-                }
-            } else if (dataBuffer instanceof DataBufferShort || dataBuffer instanceof DataBufferUShort) {
-                short[] data = dataBuffer instanceof DataBufferShort ? ((DataBufferShort) dataBuffer).getData()
-                    : ((DataBufferUShort) dataBuffer).getData();
-                bytesOut = new byte[data.length * 2];
-                for (int i = 0; i < data.length; i++) {
-                    bytesOut[i * 2] = (byte) (data[i] & 0xFF);
-                    bytesOut[i * 2 + 1] = (byte) ((data[i] >>> 8) & 0xFF);
-                }
-                width *= 2;
-                for (int j = 0; j < height; j++) {
-                    newSeries[j].getOutputStream().write(bytesOut, j * width, width);
-                }
-            } else if (dataBuffer instanceof DataBufferInt) {
-                int[] data = ((DataBufferInt) dataBuffer).getData();
-                bytesOut = new byte[data.length * 4];
-                for (int i = 0; i < data.length; i++) {
-                    bytesOut[i * 4] = (byte) (data[i] & 0xFF);
-                    bytesOut[i * 4 + 1] = (byte) ((data[i] >>> 8) & 0xFF);
-                    bytesOut[i * 4 + 2] = (byte) ((data[i] >>> 16) & 0xFF);
-                    bytesOut[i * 4 + 3] = (byte) ((data[i] >>> 24) & 0xFF);
-                }
-                width *= 4;
-                for (int j = 0; j < height; j++) {
-                    newSeries[j].getOutputStream().write(bytesOut, j * width, width);
+            if (newSeries[0] == null) {
+                File dir = new File(MPR_CACHE_DIR, params.seriesUID);
+                dir.mkdirs();
+                for (int i = 0; i < newSeries.length; i++) {
+                    newSeries[i] = new FileRawImage(new File(dir, "mpr_" + (i + 1) + ".wcv"));//$NON-NLS-1$ //$NON-NLS-2$
+                    builImgs[i] = new ImageCV(dstHeight, img.width(), img.type());
                 }
             }
-        }
-    }
 
-    private static BufferedImage getImage(PlanarImage source, TransposeType rotate) {
-        if (rotate == null) {
-            return source == null ? null : source.getAsBufferedImage();
+            for (int j = 0; j < newSeries.length; j++) {
+                img.row(j).copyTo(builImgs[j].row(imgIndex - 1));
+            }
         }
-        return getRotatedImage(source, rotate);
-    }
 
-    private static BufferedImage getImage(BufferedImage source, TransposeType rotate) {
-        if (rotate == null) {
-            return source == null ? null : source;
-        }
-        return getRotatedImage(source, rotate);
     }
-
-    private static BufferedImage getRotatedImage(RenderedImage source, TransposeType rotate) {
-        RenderedOp result;
-        if (source instanceof BufferedImage) {
-            source = PlanarImage.wrapRenderedImage(source);
-        }
-        // use Transpose operation
-        ParameterBlock pb = new ParameterBlock();
-        pb.addSource(source);
-        pb.add(rotate);
-        result = JAI.create("transpose", pb, ImageToolkit.NOCACHE_HINT); //$NON-NLS-1$
-        // Handle non square images. Translation is necessary because the transpose operator keeps the same
-        // origin (top left not the center of the image)
-        float diffw = source.getWidth() / 2.0f - result.getWidth() / 2.0f;
-        float diffh = source.getHeight() / 2.0f - result.getHeight() / 2.0f;
-        if (diffw != 0.0f || diffh != 0.0f) {
-            pb = new ParameterBlock();
-            pb.addSource(result);
-            pb.add(diffw);
-            pb.add(diffh);
-            result = JAI.create("translate", pb, ImageToolkit.NOCACHE_HINT); //$NON-NLS-1$
-        }
-        return result.getAsBufferedImage();
-    }
-
+    
     private static void rotate(Vector3d vSrc, Vector3d axis, double angle, Vector3d vDst) {
         axis.normalize();
         vDst.x = axis.x * (axis.x * vSrc.x + axis.y * vSrc.y + axis.z * vSrc.z) * (1 - Math.cos(angle))
@@ -700,67 +544,15 @@ public class SeriesBuilder {
             + vSrc.z * Math.cos(angle) + (-axis.y * vSrc.x + axis.x * vSrc.y) * Math.sin(angle);
     }
 
-    private static void removeAllPrivateTags(Attributes item) throws Exception {
-        // TODO remove them or skip when reading?
-        Visitor visitor = new Visitor() {
-
-            @Override
-            public boolean visit(Attributes item, int tag, VR vr, Object value) {
-                if (TagUtils.isPrivateTag(tag)) {
-                    item.setNull(tag, vr);
-                }
-                return true;
-            }
-        };
-        item.accept(visitor, true);
-    }
-
-    public static ByteBuffer getBytesFromFile(File file) {
-        FileInputStream is = null;
-        try {
-            ByteBuffer byteBuffer = ByteBuffer.allocate((int) file.length());
-            byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-            is = new FileInputStream(file);
-            FileChannel in = is.getChannel();
-            in.read(byteBuffer);
-            byteBuffer.flip();
-            return byteBuffer;
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            FileUtil.safeClose(is);
-        }
-        return null;
-    }
-
-    public static void writToFile(File file, ByteBuffer byteBuffer) {
-        FileOutputStream os = null;
-        try {
-            byteBuffer.order(ByteOrder.LITTLE_ENDIAN);
-            os = new FileOutputStream(file);
-            FileChannel out = os.getChannel();
-            out.write(byteBuffer);
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            FileUtil.safeClose(os);
-        }
-    }
-
     public static void confirmMessage(final Component view, final String message, final boolean[] abort) {
-        GuiExecutor.instance().invokeAndWait(new Runnable() {
-
-            @Override
-            public void run() {
-                int usrChoice =
-                    JOptionPane.showConfirmDialog(view, message + Messages.getString("SeriesBuilder.add_warn"), //$NON-NLS-1$
-                        MPRFactory.NAME, JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-                if (usrChoice == JOptionPane.NO_OPTION) {
-                    abort[0] = true;
-                } else {
-                    // bypass for other similar messages
-                    abort[1] = true;
-                }
+        GuiExecutor.instance().invokeAndWait(() -> {
+            int usrChoice = JOptionPane.showConfirmDialog(view, message + Messages.getString("SeriesBuilder.add_warn"), //$NON-NLS-1$
+                MPRFactory.NAME, JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+            if (usrChoice == JOptionPane.NO_OPTION) {
+                abort[0] = true;
+            } else {
+                // bypass for other similar messages
+                abort[1] = true;
             }
         });
         if (abort[0]) {
@@ -769,23 +561,23 @@ public class SeriesBuilder {
     }
 
     static class ViewParameter {
-        final String suffix;
+        final String seriesUID;
         final SliceOrientation sliceOrientation;
         final boolean reverseSeriesOrder;
-        final TransposeType transposeImage;
+        final int rotateCvType;
         final double[] imgOrientation;
         final boolean rotateOutputImg;
         final boolean reverseIndexOrder;
         final Object[] imgPosition;
         final String frameOfReferenceUID;
 
-        public ViewParameter(String suffix, SliceOrientation sliceOrientation, boolean reverseSeriesOrder,
-            TransposeType transposeImage, double[] imgOrientation, boolean rotateOutputImg, boolean reverseIndexOrder,
+        public ViewParameter(String seriesUID, SliceOrientation sliceOrientation, boolean reverseSeriesOrder,
+            int rotateCvType, double[] imgOrientation, boolean rotateOutputImg, boolean reverseIndexOrder,
             Object[] imgPosition, String frameOfReferenceUID) {
-            this.suffix = suffix;
+            this.seriesUID = seriesUID;
             this.sliceOrientation = sliceOrientation;
             this.reverseSeriesOrder = reverseSeriesOrder;
-            this.transposeImage = transposeImage;
+            this.rotateCvType = rotateCvType;
             this.imgOrientation = imgOrientation;
             this.rotateOutputImg = rotateOutputImg;
             this.reverseIndexOrder = reverseIndexOrder;

@@ -1,26 +1,26 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse  License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.model.layer;
 
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 
 import org.weasis.core.ui.Messages;
-import org.weasis.core.ui.editor.image.DefaultView2d;
 import org.weasis.core.ui.editor.image.PixelInfo;
+import org.weasis.core.ui.editor.image.ViewCanvas;
 
 public interface LayerAnnotation extends Layer {
 
     String ANNOTATIONS = Messages.getString("AnnotationsLayer.anno"); //$NON-NLS-1$
-    String MIN_ANNOTATIONS = "Minimal Annotations";
+    String MIN_ANNOTATIONS = Messages.getString("LayerAnnotation.min_anot"); //$NON-NLS-1$
     String ANONYM_ANNOTATIONS = Messages.getString("AnnotationsLayer.anonym"); //$NON-NLS-1$
     String SCALE = Messages.getString("AnnotationsLayer.scale"); //$NON-NLS-1$
     String LUT = Messages.getString("AnnotationsLayer.lut"); //$NON-NLS-1$
@@ -51,10 +51,12 @@ public interface LayerAnnotation extends Layer {
 
     void paint(Graphics2D g2d);
 
-    LayerAnnotation getLayerCopy(DefaultView2d<?> view2DPane);
+    LayerAnnotation getLayerCopy(ViewCanvas view2DPane);
 
     Boolean isShowBottomScale();
 
     void setShowBottomScale(Boolean showBottomScale);
+
+    void resetToDefault();
 
 }

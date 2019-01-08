@@ -1,8 +1,17 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.explorer.core;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.weasis.acquire.explorer.util.AbstractBean;
 
@@ -12,7 +21,7 @@ public class ItemList<T> extends AbstractBean<ItemList.eProperty> {
         INTERVAL_ADDED, INTERVAL_REMOVED, CONTENT_CHANGED
     }
 
-    protected ArrayList<T> itemList;
+    protected final ArrayList<T> itemList;
 
     public ItemList() {
         itemList = new ArrayList<>();
@@ -58,27 +67,20 @@ public class ItemList<T> extends AbstractBean<ItemList.eProperty> {
         return itemList;
     }
 
-    @SuppressWarnings("unchecked")
-    public List<T> getCopyList() {
-        return (List<T>) itemList.clone();
-    }
-
     public void addItem(T item) {
         insertItem(Integer.MAX_VALUE, item); // append to the end of list
     }
 
     public void insertItem(int index, T item) {
-        // if (item != null && !itemList.contains(item)) { // Use Set instead of List !!!!
-        if (item != null) {
-            index = index < 0 ? 0 : index >= itemList.size() ? itemList.size() : index;
-            itemList.add(index, item);
-            firePropertyChange(eProperty.INTERVAL_ADDED, null, new Interval(index, index));
+        if (item != null && !itemList.contains(item)) {
+            int insert = index < 0 ? 0 : index >= itemList.size() ? itemList.size() : index;
+            itemList.add(insert, item);
+            firePropertyChange(eProperty.INTERVAL_ADDED, null, new Interval(insert, insert));
         }
-        this.itemList = itemList.stream().distinct().collect(Collectors.toCollection(ArrayList::new));
     }
 
     public void addItems(List<T> list) {
-        if (list != null && list.size() > 0) {
+        if (list != null && !list.isEmpty()) {
             for (T item : list) {
                 if (item != null) {
                     itemList.add(item);
@@ -96,12 +98,12 @@ public class ItemList<T> extends AbstractBean<ItemList.eProperty> {
     public void removeItem(int index) {
         if (index >= 0 && index < itemList.size()) {
             firePropertyChange(eProperty.INTERVAL_REMOVED, null, new Interval(index, index));
-            itemList.remove(index); // TODO - should not be this way but better to add item in Interval data Structure
+            itemList.remove(index);
         }
     }
 
     public void removeItems(List<T> list) {
-        if (list != null && list.size() > 0) {
+        if (list != null && !list.isEmpty()) {
             for (T item : list) {
                 removeItem(item);
             }
@@ -109,7 +111,6 @@ public class ItemList<T> extends AbstractBean<ItemList.eProperty> {
     }
 
     public void clear() {
-
         int size = itemList.size();
         if (size > 0) {
             firePropertyChange(eProperty.INTERVAL_REMOVED, null, new Interval(0, size - 1));
@@ -134,11 +135,20 @@ public class ItemList<T> extends AbstractBean<ItemList.eProperty> {
     }
 
     public static class Interval {
-        public int index0, index1;
+        private final int min;
+        private final int max;
 
         public Interval(int index0, int index1) {
-            this.index0 = Math.min(index0, index1);
-            this.index1 = Math.max(index0, index1);
+            this.min = Math.min(index0, index1);
+            this.max = Math.max(index0, index1);
+        }
+
+        public int getMin() {
+            return min;
+        }
+
+        public int getMax() {
+            return max;
         }
     }
 

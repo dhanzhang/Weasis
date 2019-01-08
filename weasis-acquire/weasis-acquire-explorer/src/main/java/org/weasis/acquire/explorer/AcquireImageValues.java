@@ -1,18 +1,33 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.explorer;
 
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.util.Optional;
 
+import org.weasis.core.api.gui.util.MathUtil;
 import org.weasis.core.api.image.util.Unit;
+import org.weasis.core.api.util.Copyable;
+
+import com.privatejgoodies.common.base.Objects;
 
 /**
  * Store all modifiables values. Enable to compare two objects for dirty check.
- * 
+ *
  * @author Yannick LARVOR
  * @version 2.5.0
  * @since 2.5.0 - 2016-04-18 - ylar - Creation
  */
-public class AcquireImageValues implements Cloneable {
+public class AcquireImageValues implements Copyable<AcquireImageValues> {
     private Rectangle cropZone = null;
     private Point layerOffset = null;
     private int orientation = 0;
@@ -24,6 +39,24 @@ public class AcquireImageValues implements Cloneable {
     private Unit calibrationUnit = Unit.PIXEL;
     private double calibrationRatio = 1.0;
     private Double ratio = null;
+
+    public AcquireImageValues() {
+        super();
+    }
+
+    public AcquireImageValues(AcquireImageValues object) {
+        setCropZone(Optional.ofNullable(object.cropZone).map(r -> r.getBounds()).orElse(null));
+        setLayerOffset(Optional.ofNullable(object.layerOffset).map(p -> p.getLocation()).orElse(null));
+        setOrientation(object.orientation);
+        setRotation(object.rotation);
+        setBrightness(object.brightness);
+        setContrast(object.contrast);
+        setAutoLevel(object.autoLevel);
+        setFlip(object.flip);
+        setCalibrationUnit(object.calibrationUnit);
+        setCalibrationRatio(object.calibrationRatio);
+        setRatio(object.ratio);
+    }
 
     public int getOrientation() {
         return orientation;
@@ -86,17 +119,8 @@ public class AcquireImageValues implements Cloneable {
     }
 
     @Override
-    public Object clone() {
-        AcquireImageValues clone = null;
-        try {
-            clone = (AcquireImageValues) super.clone();
-            if (cropZone != null) {
-                clone.cropZone = (Rectangle) cropZone.clone();
-            }
-        } catch (CloneNotSupportedException e) {
-             return null;
-        }
-        return clone;
+    public AcquireImageValues copy() {
+        return new AcquireImageValues(this);
     }
 
     public boolean isAutoLevel() {
@@ -138,7 +162,7 @@ public class AcquireImageValues implements Cloneable {
     public void setRatio(Double ratio) {
         this.ratio = ratio;
     }
-    
+
     @Override
     public int hashCode() {
         final int prime = 31;
@@ -156,7 +180,7 @@ public class AcquireImageValues implements Cloneable {
         result = prime * result + orientation;
         result = prime * result + rotation;
         result = prime * result + ((ratio == null) ? 0 : ratio.hashCode());
-        
+
         return result;
     }
 
@@ -178,7 +202,7 @@ public class AcquireImageValues implements Cloneable {
         if (brightness != other.brightness) {
             return false;
         }
-        if (Double.doubleToLongBits(calibrationRatio) != Double.doubleToLongBits(other.calibrationRatio)) {
+        if (MathUtil.isDifferent(calibrationRatio, other.calibrationRatio)) {
             return false;
         }
         if (calibrationUnit != other.calibrationUnit) {
@@ -210,40 +234,35 @@ public class AcquireImageValues implements Cloneable {
         if (rotation != other.rotation) {
             return false;
         }
-        if (ratio != other.ratio) {
-            return false;
-        }
-        return true;
+        return Objects.equals(ratio, other.ratio);
     }
 
     @Override
     public String toString() {
         StringBuilder builder = new StringBuilder();
-        builder.append("AcquireImageValues[cropZone=>");
+        builder.append("AcquireImageValues[cropZone=>"); //$NON-NLS-1$
         builder.append(cropZone);
-        builder.append("layerOffset=>");
+        builder.append("layerOffset=>"); //$NON-NLS-1$
         builder.append(layerOffset);
-        builder.append("orientation=>");
+        builder.append("orientation=>"); //$NON-NLS-1$
         builder.append(orientation);
-        builder.append("rotation=>");
+        builder.append("rotation=>"); //$NON-NLS-1$
         builder.append(rotation);
-        builder.append("brightness=>");
+        builder.append("brightness=>"); //$NON-NLS-1$
         builder.append(brightness);
-        builder.append("contrast=>");
+        builder.append("contrast=>"); //$NON-NLS-1$
         builder.append(contrast);
-        builder.append("autoLevel=>");
+        builder.append("autoLevel=>"); //$NON-NLS-1$
         builder.append(autoLevel);
-        builder.append("flip=>");
+        builder.append("flip=>"); //$NON-NLS-1$
         builder.append(flip);
-        builder.append("calibrationUnit=>");
+        builder.append("calibrationUnit=>"); //$NON-NLS-1$
         builder.append(calibrationUnit);
-        builder.append("calibrationRatio=>");
+        builder.append("calibrationRatio=>"); //$NON-NLS-1$
         builder.append(calibrationRatio);
-        builder.append("ratio=>");
+        builder.append("ratio=>"); //$NON-NLS-1$
         builder.append(ratio);
         return builder.toString();
     }
-
-    
 
 }

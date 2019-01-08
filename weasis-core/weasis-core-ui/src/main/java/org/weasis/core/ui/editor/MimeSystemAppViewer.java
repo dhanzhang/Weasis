@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.editor;
 
 import java.awt.Desktop;
@@ -25,18 +25,18 @@ import org.weasis.core.api.media.data.MediaSeriesGroup;
 import org.weasis.core.ui.docking.DockableTool;
 import org.weasis.core.ui.util.Toolbar;
 
-public abstract class MimeSystemAppViewer implements SeriesViewer<MediaElement<?>> {
+public abstract class MimeSystemAppViewer implements SeriesViewer<MediaElement> {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(MimeSystemAppViewer.class);
 
-    private static final String ERROR_MSG = "Cannot open {} with the default system application";
+    private static final String ERROR_MSG = "Cannot open {} with the default system application"; //$NON-NLS-1$
 
     @Override
     public void close() {
     }
 
     @Override
-    public List<MediaSeries<MediaElement<?>>> getOpenSeries() {
+    public List<MediaSeries<MediaElement>> getOpenSeries() {
         return null;
     }
 
@@ -72,7 +72,7 @@ public abstract class MimeSystemAppViewer implements SeriesViewer<MediaElement<?
     }
 
     @Override
-    public void removeSeries(MediaSeries<MediaElement<?>> sequence) {
+    public void removeSeries(MediaSeries<MediaElement> sequence) {
 
     }
 

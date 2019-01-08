@@ -1,20 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.image;
 
 import java.util.ArrayList;
-
-import javax.media.jai.LookupTableJAI;
+import java.util.List;
 
 import org.weasis.core.api.Messages;
+import org.weasis.opencv.data.LookupTableCV;
 
 /**
  * @author btja
@@ -53,10 +53,11 @@ public final class LutShape {
 
     // //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-    public static final ArrayList<LutShape> DEFAULT_FACTORY_FUNCTIONS;
+
+    public static final List<LutShape> DEFAULT_FACTORY_FUNCTIONS;
 
     static {
-        DEFAULT_FACTORY_FUNCTIONS = new ArrayList<LutShape>();
+        DEFAULT_FACTORY_FUNCTIONS = new ArrayList<>();
 
         DEFAULT_FACTORY_FUNCTIONS.add(LutShape.LINEAR);
         DEFAULT_FACTORY_FUNCTIONS.add(LutShape.SIGMOID);
@@ -65,24 +66,6 @@ public final class LutShape {
         DEFAULT_FACTORY_FUNCTIONS.add(LutShape.LOG_INV);
     }
 
-    public static final LutShape getLutShape(String shape) {
-        if (shape != null) {
-            String val = shape.toUpperCase();
-            if ("LINEAR".equals(val)) { //$NON-NLS-1$
-                return LutShape.LINEAR;
-            } else if ("SIGMOID".equals(val)) { //$NON-NLS-1$
-                return LutShape.SIGMOID;
-            } else if ("SIGMOID_NORM".equals(val)) { //$NON-NLS-1$
-                return LutShape.SIGMOID_NORM;
-            } else if ("LOG".equals(val)) { //$NON-NLS-1$
-                return LutShape.LOG;
-            } else if ("LOG_INV".equals(val)) { //$NON-NLS-1$
-                return LutShape.LOG_INV;
-            }
-        }
-        return null;
-
-    }
 
     // //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -92,9 +75,9 @@ public final class LutShape {
      */
     protected final eFunction function;
     protected final String explanantion;
-    protected final LookupTableJAI lookup;
+    protected final LookupTableCV lookup;
 
-    public LutShape(LookupTableJAI lookup, String explanantion) {
+    public LutShape(LookupTableCV lookup, String explanantion) {
         if (lookup == null) {
             throw new IllegalArgumentException();
         }
@@ -122,7 +105,7 @@ public final class LutShape {
         return function;
     }
 
-    public LookupTableJAI getLookup() {
+    public LookupTableCV getLookup() {
         return lookup;
     }
 
@@ -148,5 +131,23 @@ public final class LutShape {
     @Override
     public int hashCode() {
         return (function != null) ? function.hashCode() : lookup.hashCode();
+    }
+
+    public static final LutShape getLutShape(String shape) {
+        if (shape != null) {
+            String val = shape.toUpperCase();
+            if ("LINEAR".equals(val)) { //$NON-NLS-1$
+                return LutShape.LINEAR;
+            } else if ("SIGMOID".equals(val)) { //$NON-NLS-1$
+                return LutShape.SIGMOID;
+            } else if ("SIGMOID_NORM".equals(val)) { //$NON-NLS-1$
+                return LutShape.SIGMOID_NORM;
+            } else if ("LOG".equals(val)) { //$NON-NLS-1$
+                return LutShape.LOG;
+            } else if ("LOG_INV".equals(val)) { //$NON-NLS-1$
+                return LutShape.LOG_INV;
+            }
+        }
+        return null;
     }
 }

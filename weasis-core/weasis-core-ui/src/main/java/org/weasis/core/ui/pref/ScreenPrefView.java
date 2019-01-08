@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.pref;
 
 import java.awt.BasicStroke;
@@ -23,8 +23,7 @@ import java.awt.Paint;
 import java.awt.Rectangle;
 import java.awt.Stroke;
 import java.awt.Window;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
 import java.util.List;
 
 import javax.swing.Box;
@@ -61,21 +60,16 @@ public class ScreenPrefView extends AbstractItemDialogPage {
         BorderLayout borderLayout = new BorderLayout();
         setLayout(borderLayout);
 
-        JPanel panel_2 = new JPanel();
-        FlowLayout flowLayout_1 = (FlowLayout) panel_2.getLayout();
-        flowLayout_1.setHgap(10);
-        flowLayout_1.setAlignment(FlowLayout.RIGHT);
-        flowLayout_1.setVgap(7);
-        add(panel_2, BorderLayout.SOUTH);
+        JPanel panel2 = new JPanel();
+        FlowLayout flowLayout1 = (FlowLayout) panel2.getLayout();
+        flowLayout1.setHgap(10);
+        flowLayout1.setAlignment(FlowLayout.RIGHT);
+        flowLayout1.setVgap(7);
+        add(panel2, BorderLayout.SOUTH);
 
         JButton btnNewButton = new JButton(org.weasis.core.ui.Messages.getString("restore.values")); //$NON-NLS-1$
-        panel_2.add(btnNewButton);
-        btnNewButton.addActionListener(new ActionListener() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                resetoDefaultValues();
-            }
-        });
+        panel2.add(btnNewButton);
+        btnNewButton.addActionListener(e -> resetoDefaultValues());
 
         JPanel panel1 = new JPanel();
         panel1.setBorder(new TitledBorder(null, Messages.getString("ScreenPrefView.settings"), TitledBorder.LEADING, //$NON-NLS-1$
@@ -86,6 +80,7 @@ public class ScreenPrefView extends AbstractItemDialogPage {
         panel1.add(panelList, BorderLayout.NORTH);
         panelList.setLayout(new BoxLayout(panelList, BoxLayout.Y_AXIS));
 
+        final JComboBox<String> defMonitorComboBox = new JComboBox<>();
         List<Monitor> monitors = MeasureTool.viewSetting.getMonitors();
         for (int i = 0; i < monitors.size(); i++) {
             final Monitor monitor = monitors.get(i);
@@ -107,6 +102,7 @@ public class ScreenPrefView extends AbstractItemDialogPage {
             buf.append("x"); //$NON-NLS-1$
             buf.append(mb.height);
             final String title = buf.toString();
+            defMonitorComboBox.addItem(title);
 
             if (monitor.getRealScaleFactor() > 0) {
                 buf.append(" ("); //$NON-NLS-1$
@@ -135,6 +131,31 @@ public class ScreenPrefView extends AbstractItemDialogPage {
             panelList.add(p);
 
         }
+
+        int defIndex = getDefaultMonitor();
+        if (defIndex < 0 || defIndex >= defMonitorComboBox.getItemCount()) {
+            defIndex = 0;
+        }
+        defMonitorComboBox.setSelectedIndex(defIndex);
+        defMonitorComboBox.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                JComboBox<?> comboBox = (JComboBox<?>) e.getSource();
+                BundleTools.LOCAL_PERSISTENCE.putIntProperty("default.monitor", comboBox.getSelectedIndex()); //$NON-NLS-1$
+            }
+        });
+
+        final JPanel panel3 = new JPanel();
+        panel3.setAlignmentY(Component.TOP_ALIGNMENT);
+        panel3.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel3.setLayout(new FlowLayout(FlowLayout.LEFT, 2, 3));
+        final JLabel presetsLabel = new JLabel(Messages.getString("ScreenPrefView.def_monitor") + StringUtil.COLON); //$NON-NLS-1$
+        panel3.add(presetsLabel);
+        panel3.add(defMonitorComboBox);
+        panelList.add(panel3);
+    }
+
+    public static int getDefaultMonitor() {
+        return BundleTools.LOCAL_PERSISTENCE.getIntProperty("default.monitor", 0); //$NON-NLS-1$
     }
 
     @Override

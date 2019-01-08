@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic.imp.area;
 
 import java.awt.geom.Point2D;
@@ -85,8 +95,8 @@ public class RectangleGraphic extends AbstractDragGraphicArea {
     }
 
     public RectangleGraphic buildGraphic(Rectangle2D rectangle) throws InvalidShapeException {
-        Optional.ofNullable(rectangle).orElseThrow(() -> new InvalidShapeException("Rectangle2D is null!"));
-        setHandlePointList(rectangle);
+        Rectangle2D r = Optional.ofNullable(rectangle).orElseThrow(() -> new InvalidShapeException("Rectangle2D is null!")); //$NON-NLS-1$
+        setHandlePointList(r);
         prepareShape();
         return this;
     }
@@ -259,10 +269,16 @@ public class RectangleGraphic extends AbstractDragGraphicArea {
         setHandlePoint(eHandlePoint.W.index, new Point2D.Double(x, y + h / 2));
     }
 
-    public static enum eHandlePoint {
+    public enum eHandlePoint {
         NONE(-1), NW(0), SE(1), NE(2), SW(3), N(4), S(5), E(6), W(7);
         // 0 and 1 must be diagonal point of rectangle
 
+        static final Map<Integer, eHandlePoint> map = new HashMap<>(eHandlePoint.values().length);
+        static {
+            for (eHandlePoint corner : eHandlePoint.values()) {
+                map.put(corner.index, corner);
+            }
+        }
         public final int index;
 
         eHandlePoint(int index) {
@@ -273,17 +289,9 @@ public class RectangleGraphic extends AbstractDragGraphicArea {
             return index;
         }
 
-        static final Map<Integer, eHandlePoint> map = new HashMap<>(eHandlePoint.values().length);
-
-        static {
-            for (eHandlePoint corner : eHandlePoint.values()) {
-                map.put(corner.index, corner);
-            }
-        }
-
         static eHandlePoint valueFromIndex(int index) {
             return Optional.ofNullable(map.get(index))
-                .orElseThrow(() -> new RuntimeException("Not a valid index for a rectangular DragGraphic : " + index));
+                .orElseThrow(() -> new RuntimeException("Not a valid index for a rectangular DragGraphic : " + index)); //$NON-NLS-1$
         }
 
         eHandlePoint getVerticalMirror() {

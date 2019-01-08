@@ -1,19 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.explorer;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
+import java.util.Optional;
 
 import org.dcm4che3.data.Tag;
 import org.slf4j.LoggerFactory;
@@ -37,10 +39,11 @@ import org.weasis.core.ui.model.GraphicModel;
 import org.weasis.core.ui.serialize.XmlSerializer;
 import org.weasis.dicom.codec.DicomCodec;
 import org.weasis.dicom.codec.DicomMediaIO;
+import org.weasis.dicom.codec.DicomSpecialElement;
 import org.weasis.dicom.codec.TagD;
 import org.weasis.dicom.codec.TagD.Level;
 
-public class LoadLocalDicom extends ExplorerTask {
+public class LoadLocalDicom extends ExplorerTask<Boolean, String> {
 
     private static final org.slf4j.Logger LOGGER = LoggerFactory.getLogger(LoadLocalDicom.class);
     private final File[] files;
@@ -62,7 +65,7 @@ public class LoadLocalDicom extends ExplorerTask {
     @Override
     protected Boolean doInBackground() throws Exception {
         dicomModel
-            .firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.LoadingStart, dicomModel, null, this));
+            .firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.LOADING_START, dicomModel, null, this));
         addSelectionAndnotify(files, true);
         return true;
     }
@@ -70,7 +73,7 @@ public class LoadLocalDicom extends ExplorerTask {
     @Override
     protected void done() {
         dicomModel
-            .firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.LoadingStop, dicomModel, null, this));
+            .firePropertyChange(new ObservableEvent(ObservableEvent.BasicAction.LOADING_STOP, dicomModel, null, this));
         LOGGER.info("End of loading DICOM locally"); //$NON-NLS-1$
     }
 
@@ -105,11 +108,9 @@ public class LoadLocalDicom extends ExplorerTask {
                             }
 
                             File gpxFile = new File(file[i].getPath() + ".xml"); //$NON-NLS-1$
-
-                            // TODO : Change graphicList
-                            GraphicModel list = XmlSerializer.readPresentationModel(gpxFile);
-                            if (list != null) {
-                                loader.setTag(TagW.PresentationModel, list);
+                            GraphicModel graphicModel = XmlSerializer.readPresentationModel(gpxFile);
+                            if (graphicModel != null) {
+                                loader.setTag(TagW.PresentationModel, graphicModel);
                             }
                         }
                     }
@@ -117,17 +118,10 @@ public class LoadLocalDicom extends ExplorerTask {
             }
         }
         for (final SeriesThumbnail t : thumbs) {
-            MediaSeries series = t.getSeries();
+            MediaSeries<MediaElement> series = t.getSeries();
             // Avoid to rebuild most of CR series thumbnail
             if (series != null && series.size(null) > 2) {
-                GuiExecutor.instance().execute(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        t.reBuildThumbnail();
-                    }
-
-                });
+                GuiExecutor.instance().execute(t::reBuildThumbnail);
             }
         }
         for (int i = 0; i < folders.size(); i++) {
@@ -137,17 +131,23 @@ public class LoadLocalDicom extends ExplorerTask {
 
     private SeriesThumbnail buildDicomStructure(DicomMediaIO dicomReader, boolean open) {
         SeriesThumbnail thumb = null;
+        String studyUID = (String) dicomReader.getTagValue(TagD.getUID(Level.STUDY));
         String patientPseudoUID = (String) dicomReader.getTagValue(TagD.getUID(Level.PATIENT));
         MediaSeriesGroup patient = dicomModel.getHierarchyNode(MediaSeriesGroupNode.rootNode, patientPseudoUID);
         if (patient == null) {
-            patient =
-                new MediaSeriesGroupNode(TagW.PatientPseudoUID, patientPseudoUID, DicomModel.patient.getTagView());
-            dicomReader.writeMetaData(patient);
-            dicomModel.addHierarchyNode(MediaSeriesGroupNode.rootNode, patient);
-            LOGGER.info("Adding patient: {}", patient); //$NON-NLS-1$
+            MediaSeriesGroup study = dicomModel.getStudyNode(studyUID);
+            if (study == null) {
+                patient =
+                    new MediaSeriesGroupNode(TagW.PatientPseudoUID, patientPseudoUID, DicomModel.patient.getTagView());
+                dicomReader.writeMetaData(patient);
+                dicomModel.addHierarchyNode(MediaSeriesGroupNode.rootNode, patient);
+                LOGGER.info("Adding patient: {}", patient); //$NON-NLS-1$
+            } else {
+                patient = dicomModel.getParent(study, DicomModel.patient);
+                LOGGER.warn("DICOM patient attributes are inconsistent! Name or ID is different within an exam."); //$NON-NLS-1$
+            }
         }
 
-        String studyUID = (String) dicomReader.getTagValue(TagD.getUID(Level.STUDY));
         MediaSeriesGroup study = dicomModel.getHierarchyNode(patient, studyUID);
         if (study == null) {
             study = new MediaSeriesGroupNode(TagD.getUID(Level.STUDY), studyUID, DicomModel.study.getTagView());
@@ -168,9 +168,9 @@ public class LoadLocalDicom extends ExplorerTask {
                     for (MediaElement media : medias) {
                         dicomModel.applySplittingRules(dicomSeries, media);
                     }
-                }
-                if (medias.length > 0) {
-                    dicomSeries.setFileSize(dicomSeries.getFileSize() + medias[0].getLength());
+                    if (medias.length > 0) {
+                        dicomSeries.setFileSize(dicomSeries.getFileSize() + medias[0].getLength());
+                    }
                 }
 
                 // Load image and create thumbnail in this Thread
@@ -178,24 +178,26 @@ public class LoadLocalDicom extends ExplorerTask {
                 if (t == null) {
                     t = DicomExplorer.createThumbnail(dicomSeries, dicomModel, Thumbnail.DEFAULT_SIZE);
                     dicomSeries.setTag(TagW.Thumbnail, t);
-                    t.repaint();
+                    Optional.ofNullable(t).ifPresent(v -> v.repaint());
                 }
 
                 if (DicomModel.isSpecialModality(dicomSeries)) {
                     dicomModel.addSpecialModality(dicomSeries);
+                    Arrays.stream(medias).filter(DicomSpecialElement.class::isInstance)
+                        .map(DicomSpecialElement.class::cast).findFirst().ifPresent(d -> dicomModel.firePropertyChange(
+                            new ObservableEvent(ObservableEvent.BasicAction.UPDATE, dicomModel, null, d)));
                 } else {
                     dicomModel.firePropertyChange(
-                        new ObservableEvent(ObservableEvent.BasicAction.Add, dicomModel, null, dicomSeries));
+                        new ObservableEvent(ObservableEvent.BasicAction.ADD, dicomModel, null, dicomSeries));
                 }
 
                 // After the thumbnail is sent to interface, it will be return to be rebuilt later
                 thumb = t;
 
                 Integer splitNb = (Integer) dicomSeries.getTagValue(TagW.SplitSeriesNumber);
-                Object dicomObject = dicomSeries.getTagValue(TagW.DicomSpecialElementList);
-                if (splitNb != null || dicomObject != null) {
+                if (splitNb != null) {
                     dicomModel.firePropertyChange(
-                        new ObservableEvent(ObservableEvent.BasicAction.Update, dicomModel, null, dicomSeries));
+                        new ObservableEvent(ObservableEvent.BasicAction.UPDATE, dicomModel, null, dicomSeries));
                 }
 
                 if (open) {
@@ -206,7 +208,7 @@ public class LoadLocalDicom extends ExplorerTask {
                     } else if (plugin != null) {
                         // Send event to select the related patient in Dicom Explorer.
                         dicomModel.firePropertyChange(
-                            new ObservableEvent(ObservableEvent.BasicAction.Select, dicomModel, null, dicomSeries));
+                            new ObservableEvent(ObservableEvent.BasicAction.SELECT, dicomModel, null, dicomSeries));
                     }
                 }
             } else {
@@ -231,19 +233,22 @@ public class LoadLocalDicom extends ExplorerTask {
 
                     if (DicomModel.isSpecialModality(dicomSeries)) {
                         dicomModel.addSpecialModality(dicomSeries);
+                        Arrays.stream(medias).filter(DicomSpecialElement.class::isInstance)
+                            .map(DicomSpecialElement.class::cast).findFirst()
+                            .ifPresent(d -> dicomModel.firePropertyChange(
+                                new ObservableEvent(ObservableEvent.BasicAction.UPDATE, dicomModel, null, d)));
                     }
 
                     // If Split series or special DICOM element update the explorer view and View2DContainer
                     Integer splitNb = (Integer) dicomSeries.getTagValue(TagW.SplitSeriesNumber);
-                    Object dicomObject = dicomSeries.getTagValue(TagW.DicomSpecialElementList);
-                    if (splitNb != null || dicomObject != null) {
+                    if (splitNb != null) {
                         dicomModel.firePropertyChange(
-                            new ObservableEvent(ObservableEvent.BasicAction.Update, dicomModel, null, dicomSeries));
+                            new ObservableEvent(ObservableEvent.BasicAction.UPDATE, dicomModel, null, dicomSeries));
                     }
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            LOGGER.error("Build DicomModel", e); //$NON-NLS-1$
         } finally {
             // dicomReader.reset();
         }

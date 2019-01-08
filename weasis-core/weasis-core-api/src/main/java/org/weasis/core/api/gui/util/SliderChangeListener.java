@@ -1,18 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.util;
 
+import java.awt.Font;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
+import java.util.Enumeration;
 import java.util.Hashtable;
 
 import javax.swing.BoundedRangeModel;
@@ -20,6 +22,7 @@ import javax.swing.BoxLayout;
 import javax.swing.DefaultBoundedRangeModel;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JSlider;
 import javax.swing.border.TitledBorder;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
@@ -29,11 +32,19 @@ import org.weasis.core.api.util.FontTools;
 import org.weasis.core.api.util.StringUtil;
 
 public abstract class SliderChangeListener extends MouseActionAdapter implements ChangeListener, ActionState {
+    public static final int DEFAULT_SMALLEST = 0;
+    public static final int DEFAULT_LARGEST = 4095;
 
-    private final BasicActionState basicState;
     private final DefaultBoundedRangeModel model;
-    private boolean triggerAction = true;
-    private boolean valueIsAdjusting = true;
+    protected final BasicActionState basicState;
+    protected volatile boolean triggerAction = true;
+    protected volatile boolean valueIsAdjusting = true;
+    protected volatile Double realMin;
+    protected volatile Double realMax;
+
+    public SliderChangeListener(ActionW action, int min, int max, int value) {
+        this(action, min, max, value, true);
+    }
 
     public SliderChangeListener(ActionW action, int min, int max, int value, boolean valueIsAdjusting,
         double mouseSensivity) {
@@ -49,8 +60,14 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
         model.addChangeListener(this);
     }
 
-    public SliderChangeListener(ActionW action, int min, int max, int value) {
-        this(action, min, max, value, true);
+    public SliderChangeListener(ActionW action, double min, double max, double value, boolean valueIsAdjusting,
+        double mouseSensivity, int sliderRange) {
+        this.basicState = new BasicActionState(action);
+        this.valueIsAdjusting = valueIsAdjusting;
+        setMouseSensivity(mouseSensivity);
+        model = new DefaultBoundedRangeModel(0, 0, 0, sliderRange);
+        setRealMinMaxValue(min, max, value, false);
+        model.addChangeListener(this);
     }
 
     @Override
@@ -63,43 +80,57 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
         return basicState.isActionEnabled();
     }
 
-    public int getMin() {
-        return model.getMinimum();
+    public void setSliderMinMax(int min, int max) {
+        setSliderMinMaxValue(min, max, model.getValue());
     }
 
-    public void setMinMax(int min, int max) {
-        setMinMaxValue(min, max, model.getValue());
+    public void setSliderMinMaxValue(int min, int max, int value) {
+        setSliderMinMaxValue(min, max, value, true);
     }
 
-    public void setMinMaxValue(int min, int max, int value) {
-        minMaxValueAction(min, max, value, true);
+    public void setSliderMinMaxValue(int min, int max, int value, boolean triggerChangedEvent) {
+        realMin = null;
+        realMax = null;
+        minMaxValueAction(min, max, value, triggerChangedEvent);
     }
 
-    public void setMinMaxValueWithoutTriggerAction(int min, int max, int value) {
-        minMaxValueAction(min, max, value, false);
+    public void setRealMinMaxValue(double min, double max, double value) {
+        setRealMinMaxValue(min, max, value, true);
+    }
+
+    public void setRealMinMaxValue(double min, double max, double value, boolean triggerChangedEvent) {
+        // Avoid to get infinity value and lock the slider
+        if (max - min == 0) {
+            max += 1;
+        }
+        realMin = min;
+        realMax = max;
+        minMaxValueAction(toSliderValue(min), toSliderValue(max), toSliderValue(value), triggerChangedEvent);
     }
 
     private synchronized void minMaxValueAction(int min, int max, int value, boolean trigger) {
-        if (min <= max) {
-            // Adjust the value to min and max to avoid the model to change the min and the max
-            value = (value > max) ? max : ((value < min) ? min : value);
-            boolean oldTrigger = triggerAction;
-            triggerAction = trigger;
-            model.setRangeProperties(value, model.getExtent(), min, max, model.getValueIsAdjusting());
-            triggerAction = oldTrigger;
-            boolean paintThicks = max < 65536;
+        if (min > max) {
+            throw new IllegalStateException("min > max"); //$NON-NLS-1$
+        }
 
-            for (Object c : basicState.getComponents()) {
-                if (c instanceof JSliderW) {
-                    JSliderW s = (JSliderW) c;
-                    if (s.isShowLabels()) {
-                        // When range becomes big do not display thick (can be very slow) and labels
-                        s.setPaintTicks(paintThicks);
-                        s.setPaintLabels(paintThicks);
-                    }
-                    updateSliderProoperties(s);
-                    setSliderLabelValues(s, min, max);
+        // Adjust the value to min and max to avoid the model to change the min and the max
+        int v = (value > max) ? max : ((value < min) ? min : value);
+        boolean oldTrigger = triggerAction;
+        triggerAction = trigger;
+        model.setRangeProperties(v, model.getExtent(), min, max, model.getValueIsAdjusting());
+        triggerAction = oldTrigger;
+        boolean paintThicks = max < 65536;
+
+        for (Object c : basicState.getComponents()) {
+            if (c instanceof JSliderW) {
+                JSliderW s = (JSliderW) c;
+                if (s.isShowLabels()) {
+                    // When range becomes big do not display thick (can be very slow) and labels
+                    s.setPaintTicks(paintThicks);
+                    s.setPaintLabels(paintThicks);
                 }
+                updateSliderProoperties(s);
+                setSliderLabelValues(s, min, max, realMin, realMax);
             }
         }
     }
@@ -113,16 +144,39 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
         return basicState.getActionW();
     }
 
-    public void setValue(int value) {
+    public void setSliderValue(int value) {
         model.setValue(value);
     }
 
-    public void setValueWithoutTriggerAction(int value) {
-        boolean ajusting = valueIsAdjusting ? true : !model.getValueIsAdjusting();
-        if (ajusting) {
-            triggerAction = false;
-            model.setValue(value);
-            triggerAction = true;
+    public void setSliderValue(int value, boolean triggerChangedEvent) {
+        if (triggerChangedEvent) {
+            setSliderValue(value);
+        } else {
+            boolean ajusting = valueIsAdjusting ? true : !model.getValueIsAdjusting();
+            if (ajusting) {
+                boolean oldTrigger = triggerAction;
+                triggerAction = false;
+                setSliderValue(value);
+                triggerAction = oldTrigger;
+            }
+        }
+    }
+
+    public void setRealValue(double value) {
+        model.setValue(toSliderValue(value));
+    }
+
+    public void setRealValue(double value, boolean triggerChangedEvent) {
+        if (triggerChangedEvent) {
+            setRealValue(value);
+        } else {
+            boolean ajusting = valueIsAdjusting ? true : !model.getValueIsAdjusting();
+            if (ajusting) {
+                boolean oldTrigger = triggerAction;
+                triggerAction = false;
+                setRealValue(value);
+                triggerAction = oldTrigger;
+            }
         }
     }
 
@@ -130,20 +184,28 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
         return valueIsAdjusting;
     }
 
-    public int getMax() {
+    public int getSliderMin() {
+        return model.getMinimum();
+    }
+
+    public int getSliderMax() {
         return model.getMaximum();
     }
 
-    public int getValue() {
+    public int getSliderValue() {
         return model.getValue();
     }
 
-    public DefaultBoundedRangeModel getModel() {
+    public double getRealValue() {
+        return toModelValue(model.getValue());
+    }
+
+    public DefaultBoundedRangeModel getSliderModel() {
         return model;
     }
 
     public String getValueToDisplay() {
-        return getValue() + ""; //$NON-NLS-1$
+        return getDisplayedModelValue(getSliderValue(), getSliderMax(), realMin, realMax);
     }
 
     @Override
@@ -152,8 +214,7 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
         if (triggerAction && ajusting) {
             stateChanged(model);
             AuditLog.LOGGER.info("action:{} val:{} min:{} max:{}", //$NON-NLS-1$
-                new Object[] { basicState.getActionW().cmd(), model.getValue(), model.getMinimum(),
-                    model.getMaximum() });
+                basicState.getActionW().cmd(), model.getValue(), model.getMinimum(), model.getMaximum());
         }
 
         for (Object c : basicState.getComponents()) {
@@ -192,34 +253,40 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
     }
 
     public static void setSliderLabelValues(JSliderW slider, final int min, int max) {
+        setSliderLabelValues(slider, min, max, null, null);
+    }
+
+    public static void setSliderLabelValues(JSliderW slider, final int min, int max, final Double realMin,
+        final Double realMax) {
         final int div = slider.getLabelDivision();
         if (div < 1) {
             return;
         }
         int space = (max - min) / (div - 1);
         final int spacing = space < 1 ? 1 : space;
-        // TODO générer les subdivisions par rapport à la taille du slider
-
         if (!slider.getPaintLabels()) {
             return;
         }
 
-        final Hashtable<Integer, JLabel> table = new Hashtable<Integer, JLabel>();
-        GuiExecutor.instance().invokeAndWait(new Runnable() {
-
-            @Override
-            public void run() {
-                for (int i = 0; i < div; i++) {
-                    Integer index = i * spacing + min;
-                    table.put(index, new JLabel("" + index)); //$NON-NLS-1$
-                }
+        final Hashtable<Integer, JLabel> table = new Hashtable<>();
+        GuiExecutor.instance().invokeAndWait(() -> {
+            for (int i = 0; i < div; i++) {
+                int index = i * spacing + min;
+                table.put(index, new JLabel(getDisplayedModelValue(i * spacing + min, max, realMin, realMax)));
             }
         });
 
         slider.setLabelTable(table);
-        FontTools.setFont10(slider);
+        SliderChangeListener.setFont(slider, FontTools.getFont10());
         slider.setMajorTickSpacing(spacing);
-        // slider.setEnabled(max - min > 0);
+    }
+
+    private static String getDisplayedModelValue(int sliderValue, int sliderMax, Double modelMin, Double modelMax) {
+        if (modelMin == null || modelMax == null) {
+            return Integer.toString(sliderValue);
+        }
+        double realVal = toModelValue(sliderValue, sliderMax, modelMin, modelMax);
+        return DecFormater.twoDecimal(realVal);
     }
 
     public void updateSliderProoperties(JSliderW slider) {
@@ -240,7 +307,7 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
             int buttonMask = getButtonMaskEx();
             if ((e.getModifiersEx() & buttonMask) != 0) {
                 lastPosition = isMoveOnX() ? e.getX() : e.getY();
-                dragAccumulator = getValue();
+                dragAccumulator = getSliderValue();
             }
         } else {
             // Ensure to not enter in drag event when the mouse event is consumed
@@ -253,15 +320,17 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
         if (basicState.isActionEnabled() && !e.isConsumed()) {
             int buttonMask = getButtonMaskEx();
             int modifier = e.getModifiersEx();
-            // dragAccumulator == Double.NaN when the listener did not catch the Pressed MouseEvent (could append in
-            // multisplit container)
-            if ((modifier & buttonMask) != 0 && dragAccumulator != Double.MAX_VALUE) {
+            /*
+             * dragAccumulator == Double.NaN when the listener did not catch the Pressed MouseEvent (could append in
+             * multisplit container)
+             */
+            if ((modifier & buttonMask) != 0 && MathUtil.isDifferent(dragAccumulator, Double.MAX_VALUE)) {
                 int position = isMoveOnX() ? e.getX() : e.getY();
-                int mask = (InputEvent.SHIFT_DOWN_MASK | InputEvent.CTRL_DOWN_MASK);
+                int mask = InputEvent.SHIFT_DOWN_MASK | InputEvent.CTRL_DOWN_MASK;
                 // Accelerate the action if ctrl or shift is down
                 double acceleratorKey = (modifier & mask) == 0 ? 1.0 : (modifier & mask) == mask ? 5.0 : 2.5;
                 double val = (position - lastPosition) * getMouseSensivity() * acceleratorKey;
-                if (val == 0.0) {
+                if (MathUtil.isEqualToZero(val)) {
                     return;
                 }
                 lastPosition = position;
@@ -270,18 +339,17 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
                 } else {
                     dragAccumulator += val;
                 }
-                if (dragAccumulator < getMin()) {
-                    dragAccumulator = getMin();
+                if (dragAccumulator < getSliderMin()) {
+                    dragAccumulator = getSliderMin();
                 }
-                if (dragAccumulator > getMax()) {
-                    dragAccumulator = getMax();
+                if (dragAccumulator > getSliderMax()) {
+                    dragAccumulator = getSliderMax();
                 }
 
-                // logger.debug("val:" + val + " accu: " + dragAccumulator);
                 if (val < 0.0) {
-                    setValue((int) Math.ceil(dragAccumulator));
+                    setSliderValue((int) Math.ceil(dragAccumulator));
                 } else {
-                    setValue((int) Math.floor(dragAccumulator));
+                    setSliderValue((int) Math.floor(dragAccumulator));
                 }
             }
         }
@@ -290,7 +358,7 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
     @Override
     public void mouseWheelMoved(MouseWheelEvent e) {
         if (basicState.isActionEnabled() && !e.isConsumed()) {
-            setValue(getValue() + e.getWheelRotation() * e.getScrollAmount());
+            setSliderValue(getSliderValue() + e.getWheelRotation() * e.getScrollAmount());
         }
     }
 
@@ -307,8 +375,39 @@ public abstract class SliderChangeListener extends MouseActionAdapter implements
         registerActionState(slider);
         if (slider.isShowLabels()) {
             slider.setPaintLabels(true);
-            setSliderLabelValues(slider, model.getMinimum(), model.getMaximum());
+            setSliderLabelValues(slider, model.getMinimum(), model.getMaximum(), realMin, realMax);
         }
         return slider;
     }
+
+    public int toSliderValue(double modelValue) {
+        Double modelMin = realMin;
+        Double modelMax = realMax;
+        if (modelMin == null || modelMax == null) {
+            return (int) modelValue;
+        }
+        return (int) Math.round((modelValue - modelMin) * (model.getMaximum() / (modelMax - modelMin)));
+    }
+
+    public double toModelValue(int sliderValue) {
+        return toModelValue(sliderValue, model.getMaximum(), realMin, realMax);
+    }
+
+    protected static double toModelValue(int sliderValue, int sliderMax, Double modelMin, Double modelMax) {
+        if (modelMin == null || modelMax == null) {
+            return sliderValue;
+        }
+        return (sliderValue * (modelMax - modelMin)) / sliderMax + modelMin;
+    }
+
+    public static void setFont(JSlider jslider, Font font) {
+        Enumeration<?> enumVal = jslider.getLabelTable().elements();
+        while (enumVal.hasMoreElements()) {
+            Object el = enumVal.nextElement();
+            if (el instanceof JLabel) {
+                ((JLabel) el).setFont(font);
+            }
+        }
+    }
+
 }

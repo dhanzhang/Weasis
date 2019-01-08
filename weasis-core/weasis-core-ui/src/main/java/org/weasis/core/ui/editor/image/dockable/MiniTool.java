@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.editor.image.dockable;
 
 import java.awt.Dimension;
@@ -43,14 +43,13 @@ public abstract class MiniTool extends PluginTool implements ActionListener {
         super(BUTTON_NAME, pluginName, POSITION.EAST, ExtendedMode.NORMALIZED, PluginTool.Type.TOOL, 5);
         // TODO display a button to minimize or do not display the tab
         dockable.setTitleShown(false);
-        setDockableWidth(40);
+        setDockableWidth(32);
         currentAction = getActions()[0];
         slider = createSlider(currentAction, vertical);
         jbInit();
     }
 
     private void jbInit() {
-        // boolean vertical = ToolWindowAnchor.RIGHT.equals(getAnchor()) || ToolWindowAnchor.LEFT.equals(getAnchor());
         setLayout(new BoxLayout(this, vertical ? BoxLayout.Y_AXIS : BoxLayout.X_AXIS));
 
         Dimension dim = new Dimension(5, 5);
@@ -80,8 +79,7 @@ public abstract class MiniTool extends PluginTool implements ActionListener {
     public abstract SliderChangeListener[] getActions();
 
     public static JSliderW createSlider(final SliderChangeListener action, boolean vertical) {
-        // boolean vertical = ToolWindowAnchor.RIGHT.equals(anchor) || ToolWindowAnchor.LEFT.equals(anchor);
-        JSliderW slider = new JSliderW(action.getMin(), action.getMax(), action.getValue());
+        JSliderW slider = new JSliderW(action.getSliderMin(), action.getSliderMax(), action.getSliderValue());
         slider.setdisplayValueInTitle(false);
         slider.setInverted(vertical);
         slider.setOrientation(vertical ? SwingConstants.VERTICAL : SwingConstants.HORIZONTAL);
@@ -97,10 +95,8 @@ public abstract class MiniTool extends PluginTool implements ActionListener {
         int w = getWidth();
         int h = getHeight();
         if (w != 0 && h != 0) {
-            boolean vertical = h >= w;
+            vertical = h >= w;
             if (vertical != slider.getInverted()) {
-                // UIManager.DOCKING_CONTROL.putProperty(StackDockStation.TAB_PLACEMENT, TabPlacement.LEFT_OF_DOCKABLE);
-
                 setLayout(new BoxLayout(this, vertical ? BoxLayout.Y_AXIS : BoxLayout.X_AXIS));
                 slider.getParent()
                     .setLayout(new BoxLayout(slider.getParent(), vertical ? BoxLayout.Y_AXIS : BoxLayout.X_AXIS));
@@ -121,7 +117,7 @@ public abstract class MiniTool extends PluginTool implements ActionListener {
         for (int i = 0; i < actions.length; i++) {
             JRadioButtonMenuItem radio = new JRadioButtonMenuItem(actions[i].toString(),
                 actions[i].getActionW().getSmallIcon(), actions[i].equals(currentAction));
-            radio.setActionCommand("" + i); //$NON-NLS-1$
+            radio.setActionCommand(Integer.toString(i));
             radio.addActionListener(this);
             popupMouseScroll.add(radio);
             groupButtons.add(radio);
@@ -137,16 +133,15 @@ public abstract class MiniTool extends PluginTool implements ActionListener {
             if (item.getParent() instanceof JPopupMenu) {
 
                 SliderChangeListener newAction = getAction(e.getActionCommand());
-                if (currentAction == newAction) {
+                if (newAction == null || currentAction == newAction) {
                     return;
                 }
                 if (currentAction != null) {
                     currentAction.unregisterActionState(slider);
                 }
-                if (newAction != null) {
-                    newAction.registerActionState(slider);
-                    // SliderChangeListener.setSliderLabelValues(slider, newAction.getMin(), newAction.getMax());
-                }
+                newAction.registerActionState(slider);
+                // SliderChangeListener.setSliderLabelValues(slider, newAction.getMin(), newAction.getMax());
+
                 currentAction = newAction;
 
                 JPopupMenu pop = (JPopupMenu) item.getParent();

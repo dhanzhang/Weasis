@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.pref;
 
 import java.awt.Frame;
@@ -52,7 +62,6 @@ public class Monitor {
              */
             JFrame frame = new JFrame(this.getGraphicsConfiguration());
             Rectangle bound = this.getBounds();
-            // frame.setMaximizedBounds(bound);
             frame.setBounds(bound.x, bound.y, bound.width - 150, bound.height - 150);
             frame.setVisible(true);
             frame.setExtendedState(Frame.MAXIMIZED_BOTH);
@@ -61,7 +70,7 @@ public class Monitor {
                 // Let time to maximize window
                 Thread.sleep(500);
             } catch (InterruptedException e1) {
-                // Do noting
+                Thread.currentThread().interrupt();
             }
 
             fullscreenBounds = frame.getBounds();
@@ -81,5 +90,17 @@ public class Monitor {
             }
         }
         return null;
+    }
+
+    public static Monitor getDefaultMonitor() {
+        int defIndex = ScreenPrefView.getDefaultMonitor();
+        List<Monitor> monitors = MeasureTool.viewSetting.getMonitors();
+        if (monitors.isEmpty()) {
+            return null;
+        }
+        if (defIndex < 0 || defIndex >= monitors.size()) {
+            defIndex = 0;
+        }
+        return monitors.get(defIndex);
     }
 }

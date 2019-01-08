@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic.imp.line;
 
 import java.awt.Shape;
@@ -89,7 +99,7 @@ public class LineGraphic extends AbstractDragGraphic {
         }
         buildShape(null);
     }
-    
+
     @Override
     public boolean isShapeValid() {
         updateTool();
@@ -161,7 +171,7 @@ public class LineGraphic extends AbstractDragGraphic {
                 }
                 if (FIRST_POINT_Y.getComputed()) {
                     measVal.add(
-                        new MeasureItem(FIRST_POINT_Y, adapter.getXCalibratedValue(ptA.getY()), adapter.getUnit()));
+                        new MeasureItem(FIRST_POINT_Y, adapter.getYCalibratedValue(ptA.getY()), adapter.getUnit()));
                 }
                 if (LAST_POINT_X.getComputed()) {
                     measVal
@@ -169,7 +179,7 @@ public class LineGraphic extends AbstractDragGraphic {
                 }
                 if (LAST_POINT_Y.getComputed()) {
                     measVal
-                        .add(new MeasureItem(LAST_POINT_Y, adapter.getXCalibratedValue(ptB.getY()), adapter.getUnit()));
+                        .add(new MeasureItem(LAST_POINT_Y, adapter.getYCalibratedValue(ptB.getY()), adapter.getUnit()));
                 }
                 if (LINE_LENGTH.getComputed()) {
                     measVal.add(

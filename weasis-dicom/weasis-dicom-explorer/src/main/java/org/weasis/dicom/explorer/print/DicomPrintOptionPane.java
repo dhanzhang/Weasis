@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.explorer.print;
 
 import java.awt.GridBagConstraints;
@@ -122,7 +132,7 @@ public class DicomPrintOptionPane extends JPanel {
 
         filmDestinationComboBox = new JComboBox<>();
         filmDestinationComboBox
-            .setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_FILM_DEST, "PROCESSOR" })); //$NON-NLS-1$ //$NON-NLS-2$
+            .setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_FILM_DEST, "PROCESSOR" })); //$NON-NLS-1$
         GridBagConstraints gbcFilmDestinationComboBox = new GridBagConstraints();
         gbcFilmDestinationComboBox.fill = GridBagConstraints.VERTICAL;
         gbcFilmDestinationComboBox.anchor = GridBagConstraints.WEST;
@@ -178,7 +188,7 @@ public class DicomPrintOptionPane extends JPanel {
 
         filmOrientationComboBox = new JComboBox<>();
         filmOrientationComboBox
-            .setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_FILM_ORIENTATION, "LANDSCAPE" })); //$NON-NLS-1$ //$NON-NLS-2$
+            .setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_FILM_ORIENTATION, "LANDSCAPE" })); //$NON-NLS-1$
         GridBagConstraints gbcFilmOrientationComboBox = new GridBagConstraints();
         gbcFilmOrientationComboBox.anchor = GridBagConstraints.WEST;
         gbcFilmOrientationComboBox.insets = new Insets(0, 0, 5, 5);
@@ -274,7 +284,7 @@ public class DicomPrintOptionPane extends JPanel {
         borderDensityComboBox = new JComboBox<>();
 
         borderDensityComboBox
-            .setModel(new DefaultComboBoxModel<>(new String[] { "BLACK", DicomPrintOptions.DEF_BORDER_DENSITY })); //$NON-NLS-1$ //$NON-NLS-2$
+            .setModel(new DefaultComboBoxModel<>(new String[] { "BLACK", DicomPrintOptions.DEF_BORDER_DENSITY })); //$NON-NLS-1$
         GridBagConstraints gbcBorderDensityComboBox = new GridBagConstraints();
         gbcBorderDensityComboBox.anchor = GridBagConstraints.WEST;
         gbcBorderDensityComboBox.insets = new Insets(0, 0, 5, 0);
@@ -328,7 +338,7 @@ public class DicomPrintOptionPane extends JPanel {
         this.add(trimLabel, gbcTrimLabel);
 
         trimComboBox = new JComboBox<>();
-        trimComboBox.setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_TRIM, "YES" })); //$NON-NLS-1$ //$NON-NLS-2$
+        trimComboBox.setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_TRIM, "YES" })); //$NON-NLS-1$
         GridBagConstraints gbcTrimComboBox = new GridBagConstraints();
         gbcTrimComboBox.anchor = GridBagConstraints.SOUTHWEST;
         gbcTrimComboBox.insets = new Insets(0, 0, 5, 5);
@@ -347,7 +357,7 @@ public class DicomPrintOptionPane extends JPanel {
 
         comboBoxEmpty = new JComboBox<>();
         comboBoxEmpty
-            .setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_EMPTY_DENSITY, "WHITE" })); //$NON-NLS-1$ //$NON-NLS-2$
+            .setModel(new DefaultComboBoxModel<>(new String[] { DicomPrintOptions.DEF_EMPTY_DENSITY, "WHITE" })); //$NON-NLS-1$
         GridBagConstraints gbcComboBox = new GridBagConstraints();
         gbcComboBox.anchor = GridBagConstraints.NORTHWEST;
         gbcComboBox.insets = new Insets(0, 0, 5, 0);

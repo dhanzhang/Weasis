@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic.imp.angle;
 
 import java.awt.Shape;
@@ -138,8 +148,8 @@ public class OpenAngleToolGraphic extends AbstractDragGraphic {
         // Do not show decoration when lines are nearly parallel
         // Can cause stack overflow BUG on paint method when drawing infinite line with DashStroke
         if (lineABvalid && lineCDvalid && !linesParallel && Math.abs(angleDeg) > 0.1) {
-
-            AdvancedShape aShape = (AdvancedShape) (newShape = new AdvancedShape(this, 5));
+            newShape = new AdvancedShape(this, 5);
+            AdvancedShape aShape = (AdvancedShape) newShape;
             aShape.addShape(path);
 
             // Let arcAngle be the partial section of the ellipse that represents the measured angle

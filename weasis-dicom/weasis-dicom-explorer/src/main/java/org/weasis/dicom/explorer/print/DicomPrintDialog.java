@@ -1,14 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2011 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
- *     Marcelo Porto - initial API and implementation, Animati Sistemas de Informática Ltda. (http://www.animati.com.br)
- *
- ******************************************************************************/
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 
 package org.weasis.dicom.explorer.print;
 
@@ -32,6 +31,7 @@ import javax.swing.border.TitledBorder;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.weasis.core.api.gui.util.JMVUtils;
 import org.weasis.core.api.media.data.ImageElement;
 import org.weasis.core.api.util.StringUtil;
 import org.weasis.core.ui.editor.image.ImageViewerEventManager;
@@ -101,7 +101,7 @@ public class DicomPrintDialog<I extends ImageElement> extends JDialog {
                 try {
                     return FilmSize.valueOf(val);
                 } catch (Exception e) {
-                    LOGGER.error("Cannot find FilmSize: {}", val, e);
+                    LOGGER.error("Cannot find FilmSize: {}", val, e); //$NON-NLS-1$
                 }
             }
             return defaultValue;
@@ -157,6 +157,8 @@ public class DicomPrintDialog<I extends ImageElement> extends JDialog {
         printersComboBox.setModel(new DefaultComboBoxModel<AbstractDicomNode>());
 
         AbstractDicomNode.loadDicomNodes(printersComboBox, AbstractDicomNode.Type.PRINTER);
+        JMVUtils.setPreferredWidth(printersComboBox, 185, 185);
+        AbstractDicomNode.addTooltipToComboList(printersComboBox);
 
         horizontalStrut = Box.createHorizontalStrut(20);
         printersCfg.add(horizontalStrut);
@@ -171,33 +173,19 @@ public class DicomPrintDialog<I extends ImageElement> extends JDialog {
         printersCfg.add(deleteButton);
 
         deleteButton.setText(Messages.getString("DicomPrintDialog.delete")); //$NON-NLS-1$
-        deleteButton.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                AbstractDicomNode.deleteNodeActionPerformed(printersComboBox);
-                applyOptionsfromSelected();
-            }
+        deleteButton.addActionListener(evt -> {
+            AbstractDicomNode.deleteNodeActionPerformed(printersComboBox);
+            applyOptionsfromSelected();
         });
-        editButton.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                AbstractDicomNode.editNodeActionPerformed(printersComboBox);
-                applyOptionsfromSelected();
-            }
+        editButton.addActionListener(evt -> {
+            AbstractDicomNode.editNodeActionPerformed(printersComboBox);
+            applyOptionsfromSelected();
         });
-        addPrinterButton.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                AbstractDicomNode.addNodeActionPerformed(printersComboBox, AbstractDicomNode.Type.PRINTER);
-                applyOptionsfromSelected();
-            }
+        addPrinterButton.addActionListener(evt -> {
+            AbstractDicomNode.addNodeActionPerformed(printersComboBox, AbstractDicomNode.Type.PRINTER);
+            applyOptionsfromSelected();
         });
-        printersComboBox.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                applyOptionsfromSelected();
-            }
-        });
+        printersComboBox.addActionListener(evt -> applyOptionsfromSelected());
 
         optionPane = new DicomPrintOptionPane();
         this.getContentPane().add(optionPane, BorderLayout.CENTER);
@@ -212,22 +200,12 @@ public class DicomPrintDialog<I extends ImageElement> extends JDialog {
         footPanel.add(printButton);
 
         printButton.setText(Messages.getString("DicomPrintDialog.print")); //$NON-NLS-1$
-        printButton.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                printButtonActionPerformed(evt);
-            }
-        });
+        printButton.addActionListener(evt -> printButtonActionPerformed(evt));
 
         getRootPane().setDefaultButton(printButton);
         cancelButton = new JButton(Messages.getString("DicomPrintDialog.cancel")); //$NON-NLS-1$
         footPanel.add(cancelButton);
-        cancelButton.addActionListener(new java.awt.event.ActionListener() {
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                doClose();
-            }
-        });
+        cancelButton.addActionListener(evt -> doClose());
     }
 
     private void printButtonActionPerformed(java.awt.event.ActionEvent evt) {
@@ -264,8 +242,8 @@ public class DicomPrintDialog<I extends ImageElement> extends JDialog {
             dicomPrint.printImage(dicomPrint.printImage(layout));
         } catch (Exception e) {
             LOGGER.error("DICOM Print Service", e); //$NON-NLS-1$
-            JOptionPane.showMessageDialog(this, Messages.getString("DicomPrintDialog.error_print"), // $NON-NLS-1$
-                Messages.getString("DicomPrintDialog.error"), JOptionPane.ERROR_MESSAGE); // $NON-NLS-1$
+            JOptionPane.showMessageDialog(this, Messages.getString("DicomPrintDialog.error_print"), //$NON-NLS-1$
+                Messages.getString("DicomPrintDialog.error"), JOptionPane.ERROR_MESSAGE); //$NON-NLS-1$
         } finally {
             layout.dispose();
         }

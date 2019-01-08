@@ -1,76 +1,55 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.codec;
 
 import java.awt.image.DataBuffer;
 import java.awt.image.DataBufferUShort;
 import java.awt.image.RenderedImage;
 import java.awt.image.SampleModel;
-import java.awt.image.renderable.ParameterBlock;
-import java.lang.ref.Reference;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
-import javax.media.jai.Histogram;
-import javax.media.jai.JAI;
-import javax.media.jai.LookupTableJAI;
-import javax.media.jai.OpImage;
-import javax.media.jai.ROI;
-import javax.media.jai.RenderedOp;
-import javax.media.jai.operator.LookupDescriptor;
-
 import org.dcm4che3.data.Tag;
+import org.opencv.core.Core.MinMaxLocResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.core.api.gui.util.ActionW;
-import org.weasis.core.api.gui.util.JMVUtils;
 import org.weasis.core.api.gui.util.MathUtil;
 import org.weasis.core.api.image.LutShape;
 import org.weasis.core.api.image.PseudoColorOp;
 import org.weasis.core.api.image.WindowOp;
-import org.weasis.core.api.image.op.ImageStatisticsDescriptor;
-import org.weasis.core.api.image.util.ImageToolkit;
-import org.weasis.core.api.image.util.LayoutUtil;
 import org.weasis.core.api.image.util.Unit;
 import org.weasis.core.api.media.data.ImageElement;
 import org.weasis.core.api.media.data.SoftHashMap;
 import org.weasis.core.api.media.data.TagReadable;
 import org.weasis.core.api.media.data.TagW;
+import org.weasis.core.api.util.LangUtil;
 import org.weasis.dicom.codec.display.PresetWindowLevel;
 import org.weasis.dicom.codec.display.WindowAndPresetsOp;
 import org.weasis.dicom.codec.geometry.GeometryOfSlice;
 import org.weasis.dicom.codec.utils.DicomImageUtils;
 import org.weasis.dicom.codec.utils.LutParameters;
+import org.weasis.opencv.data.ImageCV;
+import org.weasis.opencv.data.LookupTableCV;
+import org.weasis.opencv.data.PlanarImage;
+import org.weasis.opencv.op.ImageConversion;
+import org.weasis.opencv.op.ImageProcessor;
 
 public class DicomImageElement extends ImageElement {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DicomImageElement.class);
 
-    private static final SoftHashMap<LutParameters, LookupTableJAI> LUT_Cache =
-        new SoftHashMap<LutParameters, LookupTableJAI>() {
-
-            public Reference<? extends LookupTableJAI> getReference(LutParameters key) {
-                return hash.get(key);
-            }
-
-            @Override
-            public void removeElement(Reference<? extends LookupTableJAI> soft) {
-                LutParameters key = reverseLookup.remove(soft);
-                if (key != null) {
-                    hash.remove(key);
-                }
-            }
-        };
+    private static final SoftHashMap<LutParameters, LookupTableCV> LUT_Cache = new SoftHashMap<>();
 
     private volatile List<PresetWindowLevel> windowingPresetCollection = null;
     private volatile Collection<LutShape> lutShapeCollection = null;
@@ -103,7 +82,7 @@ public class DicomImageElement extends ImageElement {
             if (val == null || val.length != 2) {
                 val = TagD.getTagValue(mediaIO, Tag.NominalScannedPixelSpacing, double[].class);
             }
-            
+
             if (val != null && val.length == 2 && val[0] > 0.0 && val[1] > 0.0) {
                 /*
                  * Pixel Spacing = Row Spacing \ Column Spacing => (Y,X) The first value is the row spacing in mm, that
@@ -122,7 +101,7 @@ public class DicomImageElement extends ImageElement {
             // HU = Hounsfield Units (CT)
             // US = Unspecified
             // Other values are permitted, but are not defined by the DICOM Standard.
-            pixelValueUnit =  TagD.getTagValue(this, Tag.RescaleType, String.class);
+            pixelValueUnit = TagD.getTagValue(this, Tag.RescaleType, String.class);
             if (pixelValueUnit == null) {
                 // For some other modalities like PET
                 pixelValueUnit = TagD.getTagValue(this, Tag.Units, String.class);
@@ -224,6 +203,11 @@ public class DicomImageElement extends ImageElement {
     public String toString() {
         return TagD.getTagValue(this, Tag.SOPInstanceUID, String.class);
     }
+    
+    @Override
+    public DcmMediaReader getMediaReader() {
+        return (DcmMediaReader) super.getMediaReader();
+    }
 
     public double getRescaleIntercept(TagReadable tagable) {
         Double prIntercept = TagD.getTagValue(tagable, Tag.RescaleIntercept, Double.class);
@@ -238,16 +222,16 @@ public class DicomImageElement extends ImageElement {
         return slope == null ? 1.0 : slope;
     }
 
-    public int pixel2mLUT(Number pixelValue, TagReadable tagable, boolean pixelPadding) {
+    public double pixel2mLUT(Number pixelValue, TagReadable tagable, boolean pixelPadding) {
         if (pixelValue != null) {
-            int val = pixelValue.intValue();
-            LookupTableJAI lookup = getModalityLookup(tagable, pixelPadding);
+            LookupTableCV lookup = getModalityLookup(tagable, pixelPadding);
             if (lookup != null) {
+                int val = pixelValue.intValue();
                 if (val >= lookup.getOffset() && val < lookup.getOffset() + lookup.getNumEntries()) {
                     return lookup.lookup(0, val);
                 }
             }
-            return val;
+            return pixelValue.doubleValue();
         }
         return 0;
     }
@@ -283,10 +267,10 @@ public class DicomImageElement extends ImageElement {
     public boolean isPhotometricInterpretationMonochrome() {
         String photometricInterpretation = getPhotometricInterpretation();
 
-        return (photometricInterpretation != null && //
+        return photometricInterpretation != null && //
             ("MONOCHROME1".equalsIgnoreCase(photometricInterpretation) //$NON-NLS-1$
                 || "MONOCHROME2" //$NON-NLS-1$
-                    .equalsIgnoreCase(photometricInterpretation)));
+                    .equalsIgnoreCase(photometricInterpretation));
     }
 
     /**
@@ -315,7 +299,7 @@ public class DicomImageElement extends ImageElement {
 
     }
 
-    public LutParameters getLutParameters(TagReadable tagable, boolean pixelPadding, LookupTableJAI mLUTSeq,
+    public LutParameters getLutParameters(TagReadable tagable, boolean pixelPadding, LookupTableCV mLUTSeq,
         boolean inversePaddingMLUT) {
         Integer paddingValue = getPaddingValue();
 
@@ -350,7 +334,7 @@ public class DicomImageElement extends ImageElement {
 
     }
 
-    public LookupTableJAI getModalityLookup(TagReadable tagable, boolean pixelPadding) {
+    public LookupTableCV getModalityLookup(TagReadable tagable, boolean pixelPadding) {
         return getModalityLookup(tagable, pixelPadding, false);
     }
 
@@ -373,10 +357,10 @@ public class DicomImageElement extends ImageElement {
      * @param inverseLUT
      * @return the modality lookup table
      */
-    protected LookupTableJAI getModalityLookup(TagReadable tagable, boolean pixelPadding, boolean inverseLUTAction) {
+    protected LookupTableCV getModalityLookup(TagReadable tagable, boolean pixelPadding, boolean inverseLUTAction) {
         Integer paddingValue = getPaddingValue();
-        LookupTableJAI prModLut = (LookupTableJAI) (tagable != null ? tagable.getTagValue(TagW.ModalityLUTData) : null);
-        final LookupTableJAI mLUTSeq = prModLut == null ? (LookupTableJAI) getTagValue(TagW.ModalityLUTData) : prModLut;
+        LookupTableCV prModLut = (LookupTableCV) (tagable != null ? tagable.getTagValue(TagW.ModalityLUTData) : null);
+        final LookupTableCV mLUTSeq = prModLut == null ? (LookupTableCV) getTagValue(TagW.ModalityLUTData) : prModLut;
         if (mLUTSeq != null) {
             if (!pixelPadding || paddingValue == null) {
                 if (super.getMinValue(tagable, false) >= mLUTSeq.getOffset()
@@ -402,7 +386,7 @@ public class DicomImageElement extends ImageElement {
         if (lutparams == null) {
             return null;
         }
-        LookupTableJAI modalityLookup = LUT_Cache.get(lutparams);
+        LookupTableCV modalityLookup = LUT_Cache.get(lutparams);
 
         if (modalityLookup != null) {
             return modalityLookup;
@@ -413,12 +397,12 @@ public class DicomImageElement extends ImageElement {
                 if (mLUTSeq.getDataType() == DataBuffer.TYPE_BYTE) {
                     byte[] data = mLUTSeq.getByteData(0);
                     if (data != null) {
-                        modalityLookup = new LookupTableJAI(data, mLUTSeq.getOffset(0));
+                        modalityLookup = new LookupTableCV(data, mLUTSeq.getOffset(0));
                     }
                 } else {
                     short[] data = mLUTSeq.getShortData(0);
                     if (data != null) {
-                        modalityLookup = new LookupTableJAI(data, mLUTSeq.getOffset(0),
+                        modalityLookup = new LookupTableCV(data, mLUTSeq.getOffset(0),
                             mLUTSeq.getData() instanceof DataBufferUShort);
                     }
                 }
@@ -447,32 +431,20 @@ public class DicomImageElement extends ImageElement {
      *
      * @return 8 bits unsigned Lookup Table
      */
-    public LookupTableJAI getVOILookup(TagReadable tagable, Double window, Double level, Double minLevel,
+    public LookupTableCV getVOILookup(TagReadable tagable, Double window, Double level, Double minLevel,
         Double maxLevel, LutShape shape, boolean fillLutOutside, boolean pixelPadding) {
 
         if (window == null || level == null || shape == null || minLevel == null || maxLevel == null) {
             return null;
         }
 
-        if (getPaddingValue() != null && isPhotometricInterpretationMonochrome()) {
-            /*
-             * When pixel padding is activated, VOI LUT must extend to the min bit stored value when MONOCHROME2 and to
-             * the max bit stored value when MONOCHROME1.
-             *
-             * C.7.5.1.1.2 Pixel Padding Value and Pixel Padding Range Limit If Photometric Interpretation
-             *
-             * (0028,0004) is MONOCHROME2, Pixel Padding Value (0028,0120) shall be less than (closer to or equal to the
-             * minimum possible pixel value) or equal to Pixel Padding Range Limit (0028,0121). If Photometric
-             * Interpretation (0028,0004) is MONOCHROME1, Pixel Padding Value (0028,0120) shall be greater than (closer
-             * to or equal to the maximum possible pixel value) or equal to Pixel Padding Range Limit (0028,0121).
-             */
-
-            // Create a VOI LUT with pixel padding values at the extremity of the allocated values.
-            fillLutOutside = true;
-        }
         int minValue;
         int maxValue;
-        if (fillLutOutside) {
+        /*
+         * When pixel padding is activated, VOI LUT must extend to the min bit stored value when MONOCHROME2 and to the
+         * max bit stored value when MONOCHROME1. See C.7.5.1.1.2
+         */
+        if (fillLutOutside || (getPaddingValue() != null && isPhotometricInterpretationMonochrome())) {
             minValue = getMinAllocatedValue(tagable, pixelPadding);
             maxValue = getMaxAllocatedValue(tagable, pixelPadding);
         } else {
@@ -495,7 +467,8 @@ public class DicomImageElement extends ImageElement {
 
     public List<PresetWindowLevel> getPresetList(boolean pixelPadding) {
         if (windowingPresetCollection == null && isImageAvailable()) {
-            windowingPresetCollection = PresetWindowLevel.getPresetCollection(this, this, pixelPadding);
+            String type = Messages.getString("PresetWindowLevel.dcm_preset"); //$NON-NLS-1$
+            windowingPresetCollection = PresetWindowLevel.getPresetCollection(this, this, pixelPadding, type);
         }
         return windowingPresetCollection;
     }
@@ -527,42 +500,8 @@ public class DicomImageElement extends ImageElement {
         return lutShapeCollection;
     }
 
-    /**
-     *
-     * @param imageSource
-     * @param pixelPadding
-     * @return Histogram of the image source after modality lookup rescaled
-     */
-
-    public Histogram getHistogram(RenderedImage imageSource, TagReadable tagable, boolean pixelPadding) {
-        LookupTableJAI lookup = getModalityLookup(tagable, pixelPadding);
-        if (imageSource == null || lookup == null) {
-            return null;
-        }
-        // TODO instead of computing histo from image get Dicom attribute if present. Handle pixel padding!
-
-        ParameterBlock pb = new ParameterBlock();
-        pb.addSource(imageSource);
-        pb.add(lookup);
-        final RenderedImage imageModalityTransformed = JAI.create("lookup", pb, null); //$NON-NLS-1$
-
-        pb.removeSources();
-        pb.removeParameters();
-
-        pb.addSource(imageModalityTransformed);
-        pb.add(null); // No ROI
-        pb.add(1); // Sampling
-        pb.add(1); // periods
-        pb.add(new int[] { getAllocatedOutRangeSize() }); // Num. bins.
-        pb.add(new double[] { getMinAllocatedValue(tagable, pixelPadding) }); // Min value to be considered.
-        pb.add(new double[] { getMaxAllocatedValue(tagable, pixelPadding) }); // Max value to be considered.
-
-        RenderedOp op = JAI.create("histogram", pb, ImageToolkit.NOCACHE_HINT); //$NON-NLS-1$
-        return (Histogram) op.getProperty("histogram"); //$NON-NLS-1$
-    }
-
     @Override
-    protected void findMinMaxValues(RenderedImage img, boolean exclude8bitImage) {
+    protected void findMinMaxValues(PlanarImage img, boolean exclude8bitImage) {
         /*
          * This function can be called several times from the inner class Load. min and max will be computed only once.
          */
@@ -580,8 +519,8 @@ public class DicomImageElement extends ImageElement {
                 Integer paddingValue = getPaddingValue();
                 if (paddingValue != null) {
                     Integer paddingLimit = getPaddingLimit();
-                    int paddingValueMin = (paddingLimit == null) ? paddingValue : Math.min(paddingValue, paddingLimit);
-                    int paddingValueMax = (paddingLimit == null) ? paddingValue : Math.max(paddingValue, paddingLimit);
+                    Integer paddingValueMin = (paddingLimit == null) ? paddingValue : Math.min(paddingValue, paddingLimit);
+                    Integer paddingValueMax = (paddingLimit == null) ? paddingValue : Math.max(paddingValue, paddingLimit);
                     findMinMaxValues(img, paddingValueMin, paddingValueMax);
                 }
             }
@@ -623,29 +562,17 @@ public class DicomImageElement extends ImageElement {
      * @param paddingValueMin
      * @param paddingValueMax
      */
-    private void findMinMaxValues(RenderedImage img, double paddingValueMin, double paddingValueMax) {
+    private void findMinMaxValues(PlanarImage img, Integer paddingValueMin, Integer paddingValueMax) {
         if (img != null) {
-            int datatype = img.getSampleModel().getDataType();
-            if (datatype == DataBuffer.TYPE_BYTE) {
+            if (ImageConversion.convertToDataType(img.type()) == DataBuffer.TYPE_BYTE) {
                 this.minPixelValue = 0.0;
                 this.maxPixelValue = 255.0;
             } else {
-                RenderedOp dst = ImageStatisticsDescriptor.create(img, (ROI) null, 1, 1, new Double(paddingValueMin),
-                    new Double(paddingValueMax), null);
-                // To ensure this image won't be stored in tile cache
-                ((OpImage) dst.getRendering()).setTileCache(null);
-
-                double[][] extrema = (double[][]) dst.getProperty("statistics"); //$NON-NLS-1$
-                double min = Double.MAX_VALUE;
-                double max = -Double.MAX_VALUE;
-                int numBands = dst.getSampleModel().getNumBands();
-
-                for (int i = 0; i < numBands; i++) {
-                    min = Math.min(min, extrema[0][i]);
-                    max = Math.max(max, extrema[1][i]);
+                MinMaxLocResult val = ImageProcessor.findMinMaxValues(img.toMat(), paddingValueMin, paddingValueMax);
+                if (val != null) {
+                    this.minPixelValue = val.minVal;
+                    this.maxPixelValue = val.maxVal;
                 }
-                this.minPixelValue = min;
-                this.maxPixelValue = max;
                 // Handle special case when min and max are equal, ex. black image
                 // + 1 to max enables to display the correct value
                 if (this.minPixelValue.equals(this.maxPixelValue)) {
@@ -703,13 +630,8 @@ public class DicomImageElement extends ImageElement {
      * @return
      */
     @Override
-    public RenderedImage getRenderedImage(final RenderedImage imageSource, Map<String, Object> params) {
+    public PlanarImage getRenderedImage(final PlanarImage imageSource, Map<String, Object> params) {
         if (imageSource == null) {
-            return null;
-        }
-
-        SampleModel sampleModel = imageSource.getSampleModel();
-        if (sampleModel == null) {
             return null;
         }
 
@@ -722,7 +644,7 @@ public class DicomImageElement extends ImageElement {
         Boolean inverseLUT = null;
         Boolean fillLutOutside = null;
         Boolean wlOnColorImage = null;
-        LookupTableJAI prLutData = null;
+        LookupTableCV prLutData = null;
         TagReadable prTags = null;
 
         if (params != null) {
@@ -737,13 +659,13 @@ public class DicomImageElement extends ImageElement {
             wlOnColorImage = (Boolean) params.get(WindowOp.P_APPLY_WL_COLOR);
             prTags = (TagReadable) params.get(WindowAndPresetsOp.P_PR_ELEMENT);
             if (prTags != null) {
-                prLutData = (LookupTableJAI) prTags.getTagValue(TagW.PRLUTsData);
+                prLutData = (LookupTableCV) prTags.getTagValue(TagW.PRLUTsData);
             }
 
         }
 
-        boolean pixPadding = JMVUtils.getNULLtoTrue(pixelPadding);
-        boolean invLUT = JMVUtils.getNULLtoFalse(inverseLUT);
+        boolean pixPadding = LangUtil.getNULLtoTrue(pixelPadding);
+        boolean invLUT = LangUtil.getNULLtoFalse(inverseLUT);
         double windowValue = (window == null) ? getDefaultWindow(pixPadding) : window;
         double levelValue = (level == null) ? getDefaultLevel(pixPadding) : level;
         LutShape lut = (lutShape == null) ? getDefaultShape(pixPadding) : lutShape;
@@ -757,14 +679,12 @@ public class DicomImageElement extends ImageElement {
             maxLevel = Math.max(levelMax, getMaxValue(prTags, pixPadding));
         }
 
-        int datatype = sampleModel.getDataType();
+        int datatype = ImageConversion.convertToDataType(imageSource.type());
 
         if (datatype >= DataBuffer.TYPE_BYTE && datatype < DataBuffer.TYPE_INT) {
-            LookupTableJAI modalityLookup = getModalityLookup(prTags, pixPadding, invLUT);
-
-            // RenderingHints hints = new RenderingHints(JAI.KEY_IMAGE_LAYOUT, new ImageLayout(imageSource));
-            RenderedImage imageModalityTransformed =
-                modalityLookup == null ? imageSource : LookupDescriptor.create(imageSource, modalityLookup, null);
+            LookupTableCV modalityLookup = getModalityLookup(prTags, pixPadding, invLUT);
+            ImageCV imageModalityTransformed =
+                modalityLookup == null ? imageSource.toImageCV() : modalityLookup.lookup(imageSource.toMat());
 
             /*
              * C.11.2.1.2 Window center and window width
@@ -772,7 +692,7 @@ public class DicomImageElement extends ImageElement {
              * Theses Attributes shall be used only for Images with Photometric Interpretation (0028,0004) values of
              * MONOCHROME1 and MONOCHROME2. They have no meaning for other Images.
              */
-            if (!JMVUtils.getNULLtoFalse(wlOnColorImage) && !isPhotometricInterpretationMonochrome()) {
+            if ((!LangUtil.getNULLtoFalse(wlOnColorImage) || MathUtil.isEqual(windowValue, 255.0) && MathUtil.isEqual(levelValue, 127.5)) && !isPhotometricInterpretationMonochrome()) {
                 /*
                  * If photometric interpretation is not monochrome do not apply VOILUT. It is necessary for
                  * PALETTE_COLOR.
@@ -780,45 +700,32 @@ public class DicomImageElement extends ImageElement {
                 return imageModalityTransformed;
             }
 
-            LookupTableJAI voiLookup = null;
+            LookupTableCV voiLookup = null;
             if (prLutData == null || lut.getLookup() != null) {
                 voiLookup = getVOILookup(prTags, windowValue, levelValue, minLevel, maxLevel, lut,
-                    JMVUtils.getNULLtoFalse(fillLutOutside), pixPadding);
+                    LangUtil.getNULLtoFalse(fillLutOutside), pixPadding);
             }
 
             if (prLutData == null) {
-                // BUG fix: for some images the color model is null. Creating 8 bits gray model layout fixes this issue.
-                return LookupDescriptor.create(imageModalityTransformed, voiLookup,
-                    LayoutUtil.createGrayRenderedImage());
+                return voiLookup.lookup(imageModalityTransformed);
             }
 
-            RenderedImage imageVoiTransformed = voiLookup == null ? imageModalityTransformed
-                : LookupDescriptor.create(imageModalityTransformed, voiLookup, null);
-            // BUG fix: for some images the color model is null. Creating 8 bits gray model layout fixes this issue.
-            return LookupDescriptor.create(imageVoiTransformed, prLutData, LayoutUtil.createGrayRenderedImage());
+            ImageCV imageVoiTransformed = voiLookup == null ? imageModalityTransformed
+                : voiLookup.lookup(imageModalityTransformed);
+            return prLutData.lookup(imageVoiTransformed);
 
         } else if (datatype == DataBuffer.TYPE_INT || datatype == DataBuffer.TYPE_FLOAT
             || datatype == DataBuffer.TYPE_DOUBLE) {
-            double low = minLevel;
-            double high = maxLevel;
+            double low = levelValue - windowValue / 2.0;
+            double high = levelValue + windowValue / 2.0;
             double range = high - low;
-            if (range < 1.0) {
+            if (range < 1.0 && datatype == DataBuffer.TYPE_INT) {
                 range = 1.0;
             }
             double slope = 255.0 / range;
             double yint = 255.0 - slope * high;
 
-            ParameterBlock pb = new ParameterBlock();
-            pb.addSource(imageSource);
-            pb.add(new double[] { slope });
-            pb.add(new double[] { yint });
-            RenderedOp rescale = JAI.create("rescale", pb, null); //$NON-NLS-1$
-
-            // produce a byte image
-            pb = new ParameterBlock();
-            pb.addSource(rescale);
-            pb.add(DataBuffer.TYPE_BYTE);
-            return JAI.create("format", pb, null); //$NON-NLS-1$
+            return ImageProcessor.rescaleToByte(ImageCV.toMat(imageSource), slope, yint);
         }
         return null;
     }

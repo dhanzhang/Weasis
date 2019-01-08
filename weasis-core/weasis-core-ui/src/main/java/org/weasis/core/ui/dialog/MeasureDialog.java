@@ -1,19 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2011 Weasis Team.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.ui.dialog;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.util.List;
+import java.util.Objects;
 
 import javax.swing.JScrollPane;
 import javax.swing.JTextPane;
@@ -28,6 +29,7 @@ import org.weasis.core.ui.editor.image.ViewCanvas;
 import org.weasis.core.ui.model.graphic.DragGraphic;
 import org.weasis.core.ui.model.graphic.GraphicArea;
 import org.weasis.core.ui.model.graphic.imp.AnnotationGraphic;
+import org.weasis.core.ui.model.graphic.imp.PixelInfoGraphic;
 
 public class MeasureDialog extends PropertiesDialog {
     private List<DragGraphic> graphics;
@@ -36,14 +38,10 @@ public class MeasureDialog extends PropertiesDialog {
 
     public MeasureDialog(ViewCanvas<?> view2d, List<DragGraphic> selectedGraphic) {
         super(SwingUtilities.getWindowAncestor(view2d.getJComponent()), Messages.getString("MeasureDialog.draw_props")); //$NON-NLS-1$
-        if (selectedGraphic == null) {
-            throw new IllegalArgumentException("Selected Graphics cannot be null!"); //$NON-NLS-1$
-        }
         this.view2D = view2d;
-        this.graphics = selectedGraphic;
+        this.graphics = Objects.requireNonNull(selectedGraphic);
         iniGraphicDialog();
         pack();
-
     }
 
     public void iniGraphicDialog() {
@@ -102,6 +100,7 @@ public class MeasureDialog extends PropertiesDialog {
                     buf.append(s);
                     buf.append("\n"); //$NON-NLS-1$
                 }
+                textPane.setEnabled(!(graphic instanceof PixelInfoGraphic));
                 textPane.setText(buf.toString());
                 panel.setViewportView(textPane);
                 getContentPane().add(panel, BorderLayout.NORTH);

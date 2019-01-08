@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic.imp.area;
 
 import static java.lang.Double.NaN;
@@ -141,7 +151,7 @@ public class PolygonGraphic extends AbstractDragGraphicArea {
             }
 
             if (!isShapeValid() || pts.size() < 3) {
-                throw new InvalidShapeException("This Polygon cannot be drawn");
+                throw new InvalidShapeException("This Polygon cannot be drawn"); //$NON-NLS-1$
             }
             buildShape(null);
         }
@@ -202,57 +212,49 @@ public class PolygonGraphic extends AbstractDragGraphicArea {
                 double ratio = adapter.getCalibRatio();
                 String unitStr = adapter.getUnit();
 
-                Area pathArea = null;
+                Area pathArea = getPathArea();
                 List<Line2D.Double> lineSegmentList = null;
 
                 if (TOP_LEFT_POINT_X.getComputed()) {
-                    Area area = Optional.ofNullable(pathArea).orElse(getPathArea());
-                    Double val = Optional.ofNullable(area)
+                    Double val = Optional.ofNullable(pathArea)
                         .map(pa -> adapter.getXCalibratedValue(pa.getBounds2D().getX())).orElse(null);
-
                     measVal.add(new MeasureItem(TOP_LEFT_POINT_X, val, unitStr));
                 }
                 if (TOP_LEFT_POINT_Y.getComputed()) {
-                    Area area = Optional.ofNullable(pathArea).orElse(getPathArea());
-                    Double val = Optional.ofNullable(area)
-                        .map(pa -> adapter.getXCalibratedValue(pa.getBounds2D().getY())).orElse(null);
-
+                    Double val = Optional.ofNullable(pathArea)
+                        .map(pa -> adapter.getYCalibratedValue(pa.getBounds2D().getY())).orElse(null);
                     measVal.add(new MeasureItem(TOP_LEFT_POINT_Y, val, unitStr));
                 }
                 if (WIDTH.getComputed()) {
-                    pathArea = (pathArea == null) ? getPathArea() : pathArea;
-                    Double val = (pathArea != null) ? ratio * pathArea.getBounds2D().getWidth() : null;
+                    Double val =
+                        Optional.ofNullable(pathArea).map(pa -> ratio * pa.getBounds2D().getWidth()).orElse(null);
                     measVal.add(new MeasureItem(WIDTH, val, unitStr));
                 }
                 if (HEIGHT.getComputed()) {
-                    Area area = Optional.ofNullable(pathArea).orElse(getPathArea());
-                    Double val = Optional.ofNullable(area).map(pa -> ratio * pa.getBounds2D().getHeight()).orElse(null);
-
+                    Double val =
+                        Optional.ofNullable(pathArea).map(pa -> ratio * pa.getBounds2D().getHeight()).orElse(null);
                     measVal.add(new MeasureItem(HEIGHT, val, unitStr));
                 }
 
                 Point2D centroid = null;
                 if (CENTROID_X.getComputed()) {
                     if (lineSegmentList == null) {
-                        pathArea = (pathArea == null) ? getPathArea() : pathArea;
                         lineSegmentList = getClosedPathSegments(pathArea);
                     }
                     centroid = (centroid == null) ? getCentroid(lineSegmentList) : centroid;
-                    Double val = (centroid != null) ? centroid.getX() * ratio : null;
+                    Double val = (centroid != null) ? adapter.getXCalibratedValue(centroid.getX()) : null;
                     measVal.add(new MeasureItem(CENTROID_X, val, unitStr));
                 }
                 if (CENTROID_Y.getComputed()) {
                     if (lineSegmentList == null) {
-                        pathArea = (pathArea == null) ? getPathArea() : pathArea;
                         lineSegmentList = getClosedPathSegments(pathArea);
                     }
                     centroid = (centroid == null) ? getCentroid(lineSegmentList) : centroid;
-                    Double val = (centroid != null) ? centroid.getY() * ratio : null;
+                    Double val = (centroid != null) ? adapter.getYCalibratedValue(centroid.getY()) : null;
                     measVal.add(new MeasureItem(CENTROID_Y, val, unitStr));
                 }
                 if (AREA.getComputed()) {
                     if (lineSegmentList == null) {
-                        pathArea = (pathArea == null) ? getPathArea() : pathArea;
                         lineSegmentList = getClosedPathSegments(pathArea);
                     }
                     Double val = (lineSegmentList != null) ? getAreaValue(lineSegmentList) * ratio * ratio : null;
@@ -261,7 +263,6 @@ public class PolygonGraphic extends AbstractDragGraphicArea {
                 }
                 if (PERIMETER.getComputed()) {
                     if (lineSegmentList == null) {
-                        pathArea = (pathArea == null) ? getPathArea() : pathArea;
                         lineSegmentList = getClosedPathSegments(pathArea);
                     }
                     Double val = (lineSegmentList != null) ? getPerimeter(lineSegmentList) * ratio : null;
@@ -363,7 +364,7 @@ public class PolygonGraphic extends AbstractDragGraphicArea {
 
             while (!pathIt.isDone()) {
 
-                Integer segType = pathIt.currentSegment(coords);
+                int segType = pathIt.currentSegment(coords);
                 Double lastX = coords[0];
                 Double lastY = coords[1];
 
@@ -449,9 +450,9 @@ public class PolygonGraphic extends AbstractDragGraphicArea {
 
     protected Point2D getCentroid(List<Line2D.Double> lineSegmentList) {
         if (lineSegmentList != null) {
-            Double area = 0d;
-            Double cx = 0d;
-            Double cy = 0d;
+            double area = 0d;
+            double cx = 0d;
+            double cy = 0d;
 
             for (Line2D.Double line : lineSegmentList) {
                 Point2D.Double p1 = (Point2D.Double) line.getP1();
@@ -463,6 +464,9 @@ public class PolygonGraphic extends AbstractDragGraphicArea {
                 cy += (p1.getY() + p2.getY()) * tmp;
             }
             area /= 2.0;
+            if(area == 0.0 || MathUtil.isEqualToZero(area)) {
+                return null;
+            }
             cx /= (6.0 * area);
             cy /= (6.0 * area);
 
@@ -501,7 +505,7 @@ public class PolygonGraphic extends AbstractDragGraphicArea {
 
     protected Double getAreaValue(List<Line2D.Double> lineSegmentList) {
         if (lineSegmentList != null) {
-            Double area = 0d;
+            double area = 0d;
 
             for (Line2D.Double line : lineSegmentList) {
                 Point2D.Double p1 = (Point2D.Double) line.getP1();

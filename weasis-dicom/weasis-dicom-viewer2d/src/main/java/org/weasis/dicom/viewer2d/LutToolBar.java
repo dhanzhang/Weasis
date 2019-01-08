@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.viewer2d;
 
 import java.awt.Component;
@@ -15,7 +25,7 @@ import org.weasis.core.api.gui.util.ActionW;
 import org.weasis.core.api.gui.util.ComboItemListener;
 import org.weasis.core.api.gui.util.DropButtonIcon;
 import org.weasis.core.api.gui.util.DropDownButton;
-import org.weasis.core.api.gui.util.GroupRadioMenu;
+import org.weasis.core.api.gui.util.GroupPopup;
 import org.weasis.core.api.gui.util.ToggleButtonListener;
 import org.weasis.core.ui.editor.image.ImageViewerEventManager;
 import org.weasis.core.ui.util.WtoolBar;
@@ -29,7 +39,7 @@ public class LutToolBar extends WtoolBar {
             throw new IllegalArgumentException("EventManager cannot be null"); //$NON-NLS-1$
         }
 
-        GroupRadioMenu menu = null;
+        GroupPopup menu = null;
         ActionState presetAction = eventManager.getAction(ActionW.PRESET);
         if (presetAction instanceof ComboItemListener) {
             menu = ((ComboItemListener) presetAction).createGroupRadioMenu();
@@ -50,7 +60,7 @@ public class LutToolBar extends WtoolBar {
             presetAction.registerActionState(presetButton);
         }
 
-        GroupRadioMenu menuLut = null;
+        GroupPopup menuLut = null;
         ActionState lutAction = eventManager.getAction(ActionW.LUT);
         if (lutAction instanceof ComboItemListener) {
             menuLut = ((ComboItemListener) lutAction).createGroupRadioMenu();

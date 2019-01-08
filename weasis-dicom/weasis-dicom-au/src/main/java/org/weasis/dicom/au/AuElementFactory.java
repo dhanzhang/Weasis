@@ -1,19 +1,24 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.au;
 
-import org.apache.felix.scr.annotations.Component;
-import org.apache.felix.scr.annotations.Property;
-import org.apache.felix.scr.annotations.Service;
 import org.weasis.dicom.codec.DicomMediaIO;
 import org.weasis.dicom.codec.DicomSpecialElement;
 import org.weasis.dicom.codec.DicomSpecialElementFactory;
 
-@Component(immediate = false)
-@Service
-@Property(name = "service.name", value = "DICOM ECG Element Factory")
+@org.osgi.service.component.annotations.Component(service = DicomSpecialElementFactory.class, immediate = false)
 public class AuElementFactory implements DicomSpecialElementFactory {
+    private static final String[] modalities = { "AU" }; //$NON-NLS-1$
 
     public static final String SERIES_AU_MIMETYPE = "au/dicom"; //$NON-NLS-1$
-    public static final String[] modalities = { "AU" }; //$NON-NLS-1$
 
     @Override
     public String getSeriesMimeType() {

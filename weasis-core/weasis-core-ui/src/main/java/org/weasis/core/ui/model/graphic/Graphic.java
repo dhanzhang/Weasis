@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.core.ui.model.graphic;
 
 import java.awt.Color;
@@ -40,10 +50,10 @@ public interface Graphic extends UUIDable, GUIEntry, KeyActionValue, Copyable<Gr
     static final Boolean DEFAULT_SELECTED = Boolean.FALSE;
     static final Integer DEFAULT_PTS_SIZE = 10;
 
-    static final String ACTION_TO_FRONT = "toFront";
-    static final String ACTION_TO_BACK = "toBack";
-    static final String ACTION_REMOVE = "remove";
-    static final String ACTION_REMOVE_REPAINT = "remove.repaint";
+    static final String ACTION_TO_FRONT = "toFront"; //$NON-NLS-1$
+    static final String ACTION_TO_BACK = "toBack"; //$NON-NLS-1$
+    static final String ACTION_REMOVE = "remove"; //$NON-NLS-1$
+    static final String ACTION_REMOVE_REPAINT = "remove.repaint"; //$NON-NLS-1$
 
     static final Integer HANDLE_SIZE = 6;
     static final Integer SELECTION_SIZE = 10;
@@ -79,14 +89,14 @@ public interface Graphic extends UUIDable, GUIEntry, KeyActionValue, Copyable<Gr
 
     /**
      * Returns the line thickness value (default value: <b>1</b>).
-     * 
+     *
      * @return The line thickness value
      */
     Float getLineThickness();
 
     /**
      * Returns a build Stroke object regarding the line thickness value.
-     * 
+     *
      * @param lineThickness
      *            Line thickness
      * @return New Stroke object with defined thickness
@@ -95,21 +105,21 @@ public interface Graphic extends UUIDable, GUIEntry, KeyActionValue, Copyable<Gr
 
     /**
      * Returns graphic's color (Default value: <b>Color.YELLOW</b>)
-     * 
+     *
      * @return Graphic's color
      */
     Paint getColorPaint();
 
     /**
      * Returns <b>TRUE</b> if the graphic is filled, <b>FALSE</b> otherwise (Default value: <b>FALSE</b>)
-     * 
+     *
      * @return <b>TRUE</b> or <b>FALSE</b>
      */
     Boolean getFilled();
 
     /**
      * Returns the Handle size (Default value: <b>6</b>)
-     * 
+     *
      * @return The Handle size
      */
     Integer getHandleSize();
@@ -197,7 +207,7 @@ public interface Graphic extends UUIDable, GUIEntry, KeyActionValue, Copyable<Gr
     /**
      * Set the list of points. Do not use this method when building a graphic programmatically, use
      * buildGraphic(List<Point2D.Double> pts) instead.
-     * 
+     *
      * @param pts
      */
     void setPts(List<Point2D.Double> pts);
@@ -223,7 +233,7 @@ public interface Graphic extends UUIDable, GUIEntry, KeyActionValue, Copyable<Gr
     /**
      * This is the method for building a new graphic with a list of points. This method is an adapter as the constructor
      * must have no parameter for serialization.
-     * 
+     *
      * @param pts
      * @return
      * @throws InvalidShapeException
@@ -235,4 +245,6 @@ public interface Graphic extends UUIDable, GUIEntry, KeyActionValue, Copyable<Gr
     void setClassID(Integer classID);
 
     Integer getClassID();
+
+    void setLabel(GraphicLabel label);
 }

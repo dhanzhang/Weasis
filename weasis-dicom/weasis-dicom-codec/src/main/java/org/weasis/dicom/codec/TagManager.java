@@ -1,10 +1,18 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.codec;
 
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.dcm4che3.data.Attributes;
 import org.weasis.core.api.media.data.TagW;
@@ -36,6 +44,15 @@ public class TagManager {
         if (list != null && !list.contains(tag)) {
             list.add(tag);
         }
+    }
+
+    public boolean contains(TagW tag, Level level) {
+        if (tag == null || level == null) {
+            return false;
+        }
+
+        List<TagW> list = levelMap.get(level);
+        return list != null && list.contains(tag);
     }
 
     public void readTags(Level level, Attributes header, Tagable tags) {

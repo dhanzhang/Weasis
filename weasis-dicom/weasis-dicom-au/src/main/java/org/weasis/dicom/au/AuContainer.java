@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.au;
 
 import java.awt.event.KeyEvent;
@@ -6,8 +16,8 @@ import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
-import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
 
@@ -20,50 +30,47 @@ import org.weasis.core.api.explorer.ObservableEvent;
 import org.weasis.core.api.gui.InsertableUtil;
 import org.weasis.core.api.gui.util.GuiExecutor;
 import org.weasis.core.api.image.GridBagLayoutModel;
+import org.weasis.core.api.media.MimeInspector;
 import org.weasis.core.api.media.data.MediaSeries;
 import org.weasis.core.api.media.data.MediaSeriesGroup;
 import org.weasis.core.api.media.data.Series;
 import org.weasis.core.api.service.BundleTools;
 import org.weasis.core.ui.docking.DockableTool;
 import org.weasis.core.ui.docking.UIManager;
-import org.weasis.core.ui.editor.SeriesViewerListener;
 import org.weasis.core.ui.editor.image.ImageViewerEventManager;
 import org.weasis.core.ui.editor.image.ImageViewerPlugin;
 import org.weasis.core.ui.editor.image.SynchView;
 import org.weasis.core.ui.editor.image.ViewCanvas;
 import org.weasis.core.ui.util.Toolbar;
 import org.weasis.dicom.codec.DicomImageElement;
-import org.weasis.dicom.codec.DicomSeries;
 import org.weasis.dicom.codec.TagD;
 import org.weasis.dicom.codec.TagD.Level;
 import org.weasis.dicom.explorer.DicomExplorer;
 import org.weasis.dicom.explorer.DicomModel;
+import org.weasis.dicom.explorer.ExportToolBar;
+import org.weasis.dicom.explorer.ImportToolBar;
 
+@SuppressWarnings("serial")
 public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements PropertyChangeListener {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuContainer.class);
 
-    public static final List<SynchView> SYNCH_LIST = Collections.synchronizedList(new ArrayList<SynchView>());
+    private static final List<SynchView> SYNCH_LIST = Collections.synchronizedList(new ArrayList<SynchView>());
+    private static final List<GridBagLayoutModel> LAYOUT_LIST =
+        Collections.synchronizedList(new ArrayList<GridBagLayoutModel>());
+
+    static final GridBagLayoutModel DEFAULT_VIEW = new GridBagLayoutModel("1x1", //$NON-NLS-1$
+        "1x1", 1, 1, AuView.class.getName()); //$NON-NLS-1$
 
     static {
         SYNCH_LIST.add(SynchView.NONE);
-    }
-
-    public static final List<GridBagLayoutModel> LAYOUT_LIST =
-        Collections.synchronizedList(new ArrayList<GridBagLayoutModel>());
-
-    public static final GridBagLayoutModel VIEWS_1x1 = new GridBagLayoutModel("1x1", //$NON-NLS-1$
-        "1x1", 1, 1, AuView.class.getName(), new ImageIcon(ImageViewerPlugin.class //$NON-NLS-1$
-            .getResource("/icon/22x22/layout1x1.png"))); //$NON-NLS-1$
-
-    static {
-        LAYOUT_LIST.add(VIEWS_1x1);
+        LAYOUT_LIST.add(DEFAULT_VIEW);
     }
 
     // Static tools shared by all the View2dContainer instances, tools are registered when a container is selected
     // Do not initialize tools in a static block (order initialization issue with eventManager), use instead a lazy
     // initialization with a method.
-    public static final List<Toolbar> TOOLBARS = Collections.synchronizedList(new ArrayList<Toolbar>(1));
-    private static volatile boolean INI_COMPONENTS = false;
+    private static final List<Toolbar> TOOLBARS = Collections.synchronizedList(new ArrayList<Toolbar>(1));
+    private static volatile boolean initComponents = false;
 
     static final ImageViewerEventManager<DicomImageElement> AU_EVENT_MANAGER =
         new ImageViewerEventManager<DicomImageElement>() {
@@ -102,14 +109,14 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
     protected AuView auview;
 
     public AuContainer() {
-        this(VIEWS_1x1, null);
+        this(DEFAULT_VIEW, null);
     }
 
     public AuContainer(GridBagLayoutModel layoutModel, String uid) {
-        super(AU_EVENT_MANAGER, layoutModel, uid, AuFactory.NAME, AuFactory.ICON, null);
+        super(AU_EVENT_MANAGER, layoutModel, uid, AuFactory.NAME, MimeInspector.audioIcon, null);
         setSynchView(SynchView.NONE);
-        if (!INI_COMPONENTS) {
-            INI_COMPONENTS = true;
+        if (!initComponents) {
+            initComponents = true;
             // Add standard toolbars
             final BundleContext context = FrameworkUtil.getBundle(this.getClass()).getBundleContext();
             String bundleName = context.getBundle().getSymbolicName();
@@ -117,8 +124,21 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
             String key = "enable"; //$NON-NLS-1$
 
             if (InsertableUtil.getBooleanProperty(BundleTools.SYSTEM_PREFERENCES, bundleName, componentName,
+                InsertableUtil.getCName(ImportToolBar.class), key, true)) {
+                Optional<Toolbar> b =
+                    UIManager.EXPLORER_PLUGIN_TOOLBARS.stream().filter(t -> t instanceof ImportToolBar).findFirst();
+                b.ifPresent(TOOLBARS::add);
+            }
+            if (InsertableUtil.getBooleanProperty(BundleTools.SYSTEM_PREFERENCES, bundleName, componentName,
+                InsertableUtil.getCName(ExportToolBar.class), key, true)) {
+                Optional<Toolbar> b =
+                    UIManager.EXPLORER_PLUGIN_TOOLBARS.stream().filter(t -> t instanceof ExportToolBar).findFirst();
+                b.ifPresent(TOOLBARS::add);
+            }
+            
+            if (InsertableUtil.getBooleanProperty(BundleTools.SYSTEM_PREFERENCES, bundleName, componentName,
                 InsertableUtil.getCName(AuToolBar.class), key, true)) {
-                TOOLBARS.add(new AuToolBar<DicomImageElement>(10));
+                TOOLBARS.add(new AuToolBar(10));
             }
         }
     }
@@ -147,7 +167,7 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
             DataExplorerView dicomView = UIManager.getExplorerplugin(DicomExplorer.NAME);
             if (dicomView != null && dicomView.getDataExplorerModel() instanceof DicomModel) {
                 dicomView.getDataExplorerModel().firePropertyChange(
-                    new ObservableEvent(ObservableEvent.BasicAction.Select, this, null, getGroupID()));
+                    new ObservableEvent(ObservableEvent.BasicAction.SELECT, this, null, getGroupID()));
             }
 
         } else {
@@ -157,16 +177,12 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
 
     @Override
     public void close() {
-        super.close();
         AuFactory.closeSeriesViewer(this);
+        super.close();
 
-        GuiExecutor.instance().execute(new Runnable() {
-
-            @Override
-            public void run() {
-                if (auview != null) {
-                    auview.dispose();
-                }
+        GuiExecutor.instance().execute(() -> {
+            if (auview != null) {
+                auview.dispose();
             }
         });
     }
@@ -178,30 +194,32 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
             ObservableEvent.BasicAction action = event.getActionCommand();
             Object newVal = event.getNewValue();
 
-            if (ObservableEvent.BasicAction.Remove.equals(action)) {
-                if (newVal instanceof DicomSeries) {
-                    if (auview != null && auview.getSeries() == newVal) {
-                        close();
-                    }
-                } else if (newVal instanceof MediaSeriesGroup) {
+            if (ObservableEvent.BasicAction.REMOVE.equals(action)) {
+                if (newVal instanceof MediaSeriesGroup) {
                     MediaSeriesGroup group = (MediaSeriesGroup) newVal;
                     // Patient Group
                     if (TagD.getUID(Level.PATIENT).equals(group.getTagID())) {
                         if (group.equals(getGroupID())) {
                             // Close the content of the plug-in
                             close();
+                            handleFocusAfterClosing();
                         }
                     }
                     // Study Group
                     else if (TagD.getUID(Level.STUDY).equals(group.getTagID())) {
                         if (event.getSource() instanceof DicomModel) {
                             DicomModel model = (DicomModel) event.getSource();
-                            for (MediaSeriesGroup s : model.getChildren(group)) {
-                                if (auview != null && auview.getSeries() == s) {
-                                    close();
-                                    break;
-                                }
+                            if (auview != null && group.equals(model.getParent(auview.getSeries(), DicomModel.study))) {
+                                close();
+                                handleFocusAfterClosing();
                             }
+                        }
+                    }
+                    // Series Group
+                    else if (TagD.getUID(Level.SERIES).equals(group.getTagID())) {
+                        if (auview != null && auview.getSeries() == newVal) {
+                            close();
+                            handleFocusAfterClosing();
                         }
                     }
                 }
@@ -221,7 +239,7 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
                 Class<?> clazz = Class.forName(type);
                 return defaultClass.isAssignableFrom(clazz);
             } catch (Exception e) {
-                LOGGER.error("Checking view type", e);
+                LOGGER.error("Checking view type", e); //$NON-NLS-1$
             }
         }
         return false;
@@ -236,17 +254,13 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
     public JComponent createUIcomponent(String clazz) {
         try {
             // FIXME use classloader.loadClass or injection
-            Class<?> cl = Class.forName(clazz);
-            JComponent component = (JComponent) cl.newInstance();
-            if (component instanceof SeriesViewerListener) {
-                eventManager.addSeriesViewerListener((SeriesViewerListener) component);
-            }
+            JComponent component = buildInstance(Class.forName(clazz));
             if (component instanceof AuView) {
                 auview = (AuView) component;
             }
             return component;
         } catch (Exception e) {
-            LOGGER.error("Cannot create {}", clazz, e);
+            LOGGER.error("Cannot create {}", clazz, e); //$NON-NLS-1$
         }
         return null;
     }
@@ -272,7 +286,7 @@ public class AuContainer extends ImageViewerPlugin<DicomImageElement> implements
 
     @Override
     public void addSeriesList(List<MediaSeries<DicomImageElement>> seriesList, boolean removeOldSeries) {
-        if (seriesList != null && seriesList.size() > 0) {
+        if (seriesList != null && !seriesList.isEmpty()) {
             addSeries(seriesList.get(0));
         }
     }

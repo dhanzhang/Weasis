@@ -1,3 +1,13 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.acquire.dockable.components.actions;
 
 import java.awt.Component;
@@ -8,19 +18,22 @@ import javax.swing.JOptionPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.weasis.acquire.AcquireObject;
+import org.weasis.acquire.Messages;
 import org.weasis.acquire.dockable.components.AcquireActionButton;
 import org.weasis.acquire.dockable.components.AcquireActionButtonsPanel;
 import org.weasis.acquire.explorer.AcquireImageInfo;
+import org.weasis.core.api.media.data.ImageElement;
+import org.weasis.core.ui.editor.image.ViewCanvas;
 
 /**
- * 
+ *
  * @author Yannick LARVOR
  * @version 2.5.0
  * @since 2.5.0 - 2016-04-08 - ylar - Creation
- * 
+ *
  */
 public abstract class AbstractAcquireAction extends AcquireObject implements AcquireAction {
-    protected final Logger LOGGER = LoggerFactory.getLogger(this.getClass());
+    private static final Logger LOGGER = LoggerFactory.getLogger(AbstractAcquireAction.class);
 
     protected final AcquireActionPanel centralPanel;
 
@@ -37,7 +50,6 @@ public abstract class AbstractAcquireAction extends AcquireObject implements Acq
         switch (cmd) {
             case INIT:
                 panel.setSelected((AcquireActionButton) e.getSource());
-                init();
                 break;
             case VALIDATE:
                 validate();
@@ -46,20 +58,21 @@ public abstract class AbstractAcquireAction extends AcquireObject implements Acq
                 cancel();
                 break;
             case RESET:
-                reset();
+                reset(e);
                 break;
             default:
-                LOGGER.warn("Unkown command : " + e.getActionCommand());
+                LOGGER.warn("Unknown command : " + e.getActionCommand()); //$NON-NLS-1$
                 break;
         }
     }
 
     @Override
-    public void init() {
+    public void validate() {
         AcquireImageInfo imageInfo = getImageInfo();
-        imageInfo.clearPreProcess();
-        imageInfo.applyPostProcess(getView());
-        imageInfo.applyPreProcess(getView());
+        ViewCanvas<ImageElement> view = getView();
+        if (imageInfo != null && view != null) {
+            validate(imageInfo, view);
+        }
     }
 
     @Override
@@ -69,26 +82,25 @@ public abstract class AbstractAcquireAction extends AcquireObject implements Acq
         boolean dirty = imageInfo.isDirty();
 
         if (dirty) {
-            imageInfo.clearPreProcess();
             centralPanel.initValues(imageInfo, imageInfo.getCurrentValues());
         }
         return dirty;
     }
 
     @Override
-    public boolean reset() {
+    public boolean reset(ActionEvent e) {
         AcquireImageInfo imageInfo = getImageInfo();
+        imageInfo.removeLayer(getView());
         boolean dirty = imageInfo.isDirtyFromDefault();
 
         if (dirty) {
-            int confirm = JOptionPane.showConfirmDialog((Component) centralPanel, "Are you sure you want to reset ?",
-                "RESET", JOptionPane.YES_NO_OPTION);
+            int confirm = JOptionPane.showConfirmDialog((Component) e.getSource(),
+                Messages.getString("AbstractAcquireAction.reset_msg"), //$NON-NLS-1$
+                "", JOptionPane.YES_NO_OPTION); //$NON-NLS-1$
             if (confirm == 0) {
                 centralPanel.initValues(imageInfo, imageInfo.getDefaultValues());
-                init();
             }
         }
-        imageInfo.removeLayer(getView());
         return dirty;
     }
 
@@ -96,8 +108,6 @@ public abstract class AbstractAcquireAction extends AcquireObject implements Acq
     public AcquireActionPanel getCentralPanel() {
         return centralPanel;
     }
-
-    public abstract void validate();
 
     public abstract AcquireActionPanel newCentralPanel();
 }

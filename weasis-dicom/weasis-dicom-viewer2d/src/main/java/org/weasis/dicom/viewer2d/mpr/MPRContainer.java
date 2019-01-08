@@ -1,9 +1,18 @@
+/*******************************************************************************
+ * Copyright (c) 2009-2018 Weasis Team and others.
+ * All rights reserved. This program and the accompanying materials
+ * are made available under the terms of the Eclipse Public License v2.0
+ * which accompanies this distribution, and is available at
+ * http://www.eclipse.org/legal/epl-v20.html
+ *
+ * Contributors:
+ *     Nicolas Roduit - initial API and implementation
+ *******************************************************************************/
 package org.weasis.dicom.viewer2d.mpr;
 
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.GridBagConstraints;
-import java.awt.event.ActionEvent;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
@@ -12,8 +21,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
-import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.ImageIcon;
 import javax.swing.JComponent;
@@ -49,7 +58,6 @@ import org.weasis.core.api.util.StringUtil;
 import org.weasis.core.api.util.StringUtil.Suffix;
 import org.weasis.core.ui.docking.DockableTool;
 import org.weasis.core.ui.docking.UIManager;
-import org.weasis.core.ui.editor.SeriesViewerListener;
 import org.weasis.core.ui.editor.image.CrosshairListener;
 import org.weasis.core.ui.editor.image.DefaultView2d;
 import org.weasis.core.ui.editor.image.ImageViewerPlugin;
@@ -62,15 +70,18 @@ import org.weasis.core.ui.editor.image.ViewCanvas;
 import org.weasis.core.ui.editor.image.ViewerToolBar;
 import org.weasis.core.ui.editor.image.ZoomToolBar;
 import org.weasis.core.ui.util.ColorLayerUI;
+import org.weasis.core.ui.util.DefaultAction;
 import org.weasis.core.ui.util.PrintDialog;
 import org.weasis.core.ui.util.Toolbar;
 import org.weasis.dicom.codec.DicomImageElement;
-import org.weasis.dicom.codec.DicomSeries;
 import org.weasis.dicom.codec.TagD;
 import org.weasis.dicom.codec.TagD.Level;
 import org.weasis.dicom.codec.geometry.ImageOrientation;
+import org.weasis.dicom.codec.geometry.ImageOrientation.Label;
 import org.weasis.dicom.explorer.DicomExplorer;
 import org.weasis.dicom.explorer.DicomModel;
+import org.weasis.dicom.explorer.ExportToolBar;
+import org.weasis.dicom.explorer.ImportToolBar;
 import org.weasis.dicom.explorer.print.DicomPrintDialog;
 import org.weasis.dicom.viewer2d.DcmHeaderToolBar;
 import org.weasis.dicom.viewer2d.EventManager;
@@ -101,14 +112,14 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
         actions.put(ActionW.LUT.cmd(), true);
         actions.put(ActionW.INVERT_LUT.cmd(), true);
         actions.put(ActionW.FILTER.cmd(), true);
-        DEFAULT_MPR = new SynchView("MPR synch", "mpr", SynchData.Mode.Stack, //$NON-NLS-1$ //$NON-NLS-2$
+        DEFAULT_MPR = new SynchView("MPR synch", "mpr", SynchData.Mode.STACK, //$NON-NLS-1$ //$NON-NLS-2$
             new ImageIcon(SynchView.class.getResource("/icon/22x22/tile.png")), actions); //$NON-NLS-1$
 
         SYNCH_LIST.add(DEFAULT_MPR);
     }
 
     public static final GridBagLayoutModel VIEWS_2x1_mpr = new GridBagLayoutModel(
-        new LinkedHashMap<LayoutConstraints, Component>(3), "mpr", Messages.getString("MPRContainer.title"), null); //$NON-NLS-1$ //$NON-NLS-2$
+        new LinkedHashMap<LayoutConstraints, Component>(3), "mpr", Messages.getString("MPRContainer.title")); //$NON-NLS-1$ //$NON-NLS-2$
 
     static {
         Map<LayoutConstraints, Component> constraints = VIEWS_2x1_mpr.getConstraints();
@@ -135,7 +146,7 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
     // initialization with a method.
     public static final List<Toolbar> TOOLBARS = Collections.synchronizedList(new ArrayList<Toolbar>());
     public static final List<DockableTool> TOOLS = View2dContainer.TOOLS;
-    private static volatile boolean INI_COMPONENTS = false;
+    private static volatile boolean initComponents = false;
 
     private volatile Thread process;
     private volatile String lastCommand;
@@ -147,14 +158,19 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
     public MPRContainer(GridBagLayoutModel layoutModel, String uid) {
         super(EventManager.getInstance(), layoutModel, uid, MPRFactory.NAME, MPRFactory.ICON, null);
         setSynchView(SynchView.NONE);
-        if (!INI_COMPONENTS) {
-            INI_COMPONENTS = true;
+        if (!initComponents) {
+            initComponents = true;
             // Add standard toolbars
             // WProperties props = (WProperties) BundleTools.SYSTEM_PREFERENCES.clone();
             // props.putBooleanProperty("weasis.toolbar.synchbouton", false); //$NON-NLS-1$
 
             EventManager evtMg = EventManager.getInstance();
-            TOOLBARS.add(View2dContainer.TOOLBARS.get(0));
+            Optional<Toolbar> importBar = View2dContainer.TOOLBARS.stream().filter(b -> b instanceof ImportToolBar).findFirst();
+            importBar.ifPresent(TOOLBARS::add);
+            Optional<Toolbar> exportBar = View2dContainer.TOOLBARS.stream().filter(b -> b instanceof ExportToolBar).findFirst();
+            exportBar.ifPresent(TOOLBARS::add);
+            Optional<Toolbar> viewBar = View2dContainer.TOOLBARS.stream().filter(b -> b instanceof ViewerToolBar).findFirst();
+            viewBar.ifPresent(TOOLBARS::add);
             TOOLBARS.add(new MeasureToolBar(evtMg, 11));
             TOOLBARS.add(new ZoomToolBar(evtMg, 20, true));
             TOOLBARS.add(new RotationToolBar(evtMg, 30));
@@ -239,7 +255,7 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
             DataExplorerView dicomView = UIManager.getExplorerplugin(DicomExplorer.NAME);
             if (dicomView != null && dicomView.getDataExplorerModel() instanceof DicomModel) {
                 dicomView.getDataExplorerModel().firePropertyChange(
-                    new ObservableEvent(ObservableEvent.BasicAction.Select, this, null, getGroupID()));
+                    new ObservableEvent(ObservableEvent.BasicAction.SELECT, this, null, getGroupID()));
             }
 
         } else {
@@ -257,6 +273,15 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
 
     }
 
+    private boolean closeIfNoContent() {
+        if (getOpenSeries().isEmpty()) {
+            close();
+            handleFocusAfterClosing();
+            return true;
+        }
+        return false;
+    }
+
     @Override
     public void close() {
         if (process != null) {
@@ -264,18 +289,8 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
             process = null;
             t.interrupt();
         }
-        super.close();
         MPRFactory.closeSeriesViewer(this);
-        GuiExecutor.instance().execute(new Runnable() {
-
-            @Override
-            public void run() {
-                for (ViewCanvas v : view2ds) {
-                    v.disposeView();
-                }
-            }
-        });
-
+        super.close();
     }
 
     @Override
@@ -284,40 +299,44 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
             ObservableEvent event = (ObservableEvent) evt;
             ObservableEvent.BasicAction action = event.getActionCommand();
             Object newVal = event.getNewValue();
-            if (ObservableEvent.BasicAction.Remove.equals(action)) {
-                if (newVal instanceof DicomSeries) {
-                    DicomSeries dicomSeries = (DicomSeries) newVal;
-                    for (ViewCanvas<DicomImageElement> v : view2ds) {
-                        MediaSeries<DicomImageElement> s = v.getSeries();
-                        if (dicomSeries.equals(s)) {
-                            v.setSeries(null);
-                        }
-                    }
-                } else if (newVal instanceof MediaSeriesGroup) {
+            if (ObservableEvent.BasicAction.REMOVE.equals(action)) {
+                if (newVal instanceof MediaSeriesGroup) {
                     MediaSeriesGroup group = (MediaSeriesGroup) newVal;
                     // Patient Group
                     if (TagD.getUID(Level.PATIENT).equals(group.getTagID())) {
                         if (group.equals(getGroupID())) {
                             // Close the content of the plug-in
                             close();
+                            handleFocusAfterClosing();
                         }
                     }
                     // Study Group
                     else if (TagD.getUID(Level.STUDY).equals(group.getTagID())) {
                         if (event.getSource() instanceof DicomModel) {
                             DicomModel model = (DicomModel) event.getSource();
-                            for (MediaSeriesGroup s : model.getChildren(group)) {
-                                for (ViewCanvas<DicomImageElement> v : view2ds) {
-                                    MediaSeries series = v.getSeries();
-                                    if (s.equals(series)) {
-                                        v.setSeries(null);
+                            for (ViewCanvas<DicomImageElement> v : view2ds) {
+                                if (group.equals(model.getParent(v.getSeries(), DicomModel.study))) {
+                                    v.setSeries(null);
+                                    if (closeIfNoContent()) {
+                                        return;
                                     }
                                 }
                             }
                         }
                     }
+                    // Series Group
+                    else if (TagD.getUID(Level.SERIES).equals(group.getTagID())) {
+                        for (ViewCanvas<DicomImageElement> v : view2ds) {
+                            if (newVal.equals(v.getSeries())) {
+                                v.setSeries(null);
+                                if (closeIfNoContent()) {
+                                    return;
+                                }
+                            }
+                        }
+                    }
                 }
-            } else if (ObservableEvent.BasicAction.Replace.equals(action)) {
+            } else if (ObservableEvent.BasicAction.REPLACE.equals(action)) {
                 if (newVal instanceof Series) {
                     Series series = (Series) newVal;
                     for (ViewCanvas<DicomImageElement> v : view2ds) {
@@ -344,7 +363,7 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
                 Class<?> clazz = Class.forName(type);
                 return defaultClass.isAssignableFrom(clazz);
             } catch (Exception e) {
-                LOGGER.error("Checking view type", e);
+                LOGGER.error("Checking view type", e); //$NON-NLS-1$
             }
         }
         return false;
@@ -363,15 +382,10 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
 
         try {
             // FIXME use classloader.loadClass or injection
-            Class<?> cl = Class.forName(clazz);
-            JComponent component = (JComponent) cl.newInstance();
-            if (component instanceof SeriesViewerListener) {
-                eventManager.addSeriesViewerListener((SeriesViewerListener) component);
-            }
-            return component;
+            return buildInstance(Class.forName(clazz));
 
         } catch (Exception e) {
-            LOGGER.error("Cannot create {}", clazz, e);
+            LOGGER.error("Cannot create {}", clazz, e); //$NON-NLS-1$
         }
         return null;
     }
@@ -390,30 +404,22 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
     public List<Action> getPrintActions() {
         ArrayList<Action> actions = new ArrayList<>(1);
         final String title = Messages.getString("View2dContainer.print_layout"); //$NON-NLS-1$
-        AbstractAction printStd =
-            new AbstractAction(title, new ImageIcon(ImageViewerPlugin.class.getResource("/icon/16x16/printer.png"))) { //$NON-NLS-1$
-
-                @Override
-                public void actionPerformed(ActionEvent e) {
-                    ColorLayerUI layer = ColorLayerUI.createTransparentLayerUI(MPRContainer.this);
-                    PrintDialog<DicomImageElement> dialog =
-                        new PrintDialog<>(SwingUtilities.getWindowAncestor(MPRContainer.this), title, eventManager);
-                    ColorLayerUI.showCenterScreen(dialog, layer);
-                }
-            };
+        DefaultAction printStd = new DefaultAction(title,
+            new ImageIcon(ImageViewerPlugin.class.getResource("/icon/16x16/printer.png")), event -> { //$NON-NLS-1$
+                ColorLayerUI layer = ColorLayerUI.createTransparentLayerUI(MPRContainer.this);
+                PrintDialog<DicomImageElement> dialog =
+                    new PrintDialog<>(SwingUtilities.getWindowAncestor(MPRContainer.this), title, eventManager);
+                ColorLayerUI.showCenterScreen(dialog, layer);
+            });
         actions.add(printStd);
 
         final String title2 = Messages.getString("View2dContainer.dcm_print"); //$NON-NLS-1$
-        AbstractAction printStd2 = new AbstractAction(title2, null) {
-
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                ColorLayerUI layer = ColorLayerUI.createTransparentLayerUI(MPRContainer.this);
-                DicomPrintDialog dialog =
-                    new DicomPrintDialog(SwingUtilities.getWindowAncestor(MPRContainer.this), title2, eventManager);
-                ColorLayerUI.showCenterScreen(dialog, layer);
-            }
-        };
+        DefaultAction printStd2 = new DefaultAction(title2, null, event -> {
+            ColorLayerUI layer = ColorLayerUI.createTransparentLayerUI(MPRContainer.this);
+            DicomPrintDialog<?> dialog =
+                new DicomPrintDialog<>(SwingUtilities.getWindowAncestor(MPRContainer.this), title2, eventManager);
+            ColorLayerUI.showCenterScreen(dialog, layer);
+        });
         actions.add(printStd2);
         return actions;
     }
@@ -486,7 +492,7 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
                                 ActionState seqAction = eventManager.getAction(ActionW.SCROLL_SERIES);
                                 if (seqAction instanceof SliderChangeListener) {
                                     SliderCineListener sliceAction = (SliderCineListener) seqAction;
-                                    sliceAction.setValue(sliceAction.getMax() / 2);
+                                    sliceAction.setSliderValue(sliceAction.getSliderMax() / 2);
                                 }
                                 ActionState cross = eventManager.getAction(ActionW.CROSSHAIR);
                                 if (cross instanceof CrosshairListener) {
@@ -506,13 +512,7 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
                     } catch (final Exception e) {
                         e.printStackTrace();
                         // Following actions need to be executed in EDT thread
-                        GuiExecutor.instance().execute(new Runnable() {
-
-                            @Override
-                            public void run() {
-                                showErrorMessage(view2ds, view, e.getMessage());
-                            }
-                        });
+                        GuiExecutor.instance().execute(() -> showErrorMessage(view2ds, view, e.getMessage()));
                     }
                 }
 
@@ -523,7 +523,7 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
         }
     }
 
-    public static void showErrorMessage(ArrayList<ViewCanvas<DicomImageElement>> view2ds,
+    public static void showErrorMessage(List<ViewCanvas<DicomImageElement>> view2ds,
         DefaultView2d<DicomImageElement> view, String message) {
         for (ViewCanvas<DicomImageElement> v : view2ds) {
             if (v != view && v instanceof MprView) {
@@ -546,7 +546,7 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
 
     @Override
     public void addSeriesList(List<MediaSeries<DicomImageElement>> seriesList, boolean removeOldSeries) {
-        if (seriesList != null && seriesList.size() > 0) {
+        if (seriesList != null && !seriesList.isEmpty()) {
             addSeries(seriesList.get(0));
         }
     }
@@ -556,18 +556,18 @@ public class MPRContainer extends ImageViewerPlugin<DicomImageElement> implement
         // Do it in addSeries()
     }
 
-    public MprView selectLayoutPositionForAddingSeries(MediaSeries s) {
+    public MprView selectLayoutPositionForAddingSeries(MediaSeries<DicomImageElement> s) {
         if (s != null) {
             Object img = s.getMedia(MediaSeries.MEDIA_POSITION.MIDDLE, null, null);
             if (img instanceof DicomImageElement) {
                 double[] v = TagD.getTagValue((DicomImageElement) img, Tag.ImageOrientationPatient, double[].class);
                 if (v != null && v.length == 6) {
-                    String orientation = ImageOrientation.makeImageOrientationLabelFromImageOrientationPatient(v[0],
+                    Label orientation = ImageOrientation.makeImageOrientationLabelFromImageOrientationPatient(v[0],
                         v[1], v[2], v[3], v[4], v[5]);
                     SliceOrientation sliceOrientation = SliceOrientation.AXIAL;
-                    if (ImageOrientation.LABELS[3].equals(orientation)) {
+                    if (ImageOrientation.Label.CORONAL.equals(orientation)) {
                         sliceOrientation = SliceOrientation.CORONAL;
-                    } else if (ImageOrientation.LABELS[2].equals(orientation)) {
+                    } else if (ImageOrientation.Label.SAGITTAL.equals(orientation)) {
                         sliceOrientation = SliceOrientation.SAGITTAL;
                     }
                     MprView view = getMprView(sliceOrientation);

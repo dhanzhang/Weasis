@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.dicom.codec;
 
 import java.io.File;
@@ -15,8 +15,9 @@ import java.io.File;
 import org.dcm4che3.data.Tag;
 import org.weasis.core.api.image.util.Unit;
 import org.weasis.core.api.media.data.AudioVideoElement;
+import org.weasis.core.api.util.FileUtil;
 
-public class DicomVideoElement extends AudioVideoElement  implements FileExtractor {
+public class DicomVideoElement extends AudioVideoElement implements FileExtractor {
 
     public static final String MPEG_MIMETYPE = "video/mpeg"; //$NON-NLS-1$
 
@@ -55,7 +56,9 @@ public class DicomVideoElement extends AudioVideoElement  implements FileExtract
     }
 
     public void setVideoFile(File videoFile) {
+        FileUtil.delete(this.videoFile);
         this.videoFile = videoFile;
+        getFileCache().setOriginalTempFile(videoFile);
     }
 
     @Override

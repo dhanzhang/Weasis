@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 
 package org.weasis.dicom.codec.utils;
 
@@ -21,23 +21,21 @@ import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAccessor;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.regex.Pattern;
 
-import javax.media.jai.LookupTableJAI;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
@@ -57,12 +55,10 @@ import org.slf4j.LoggerFactory;
 import org.weasis.core.api.gui.util.MathUtil;
 import org.weasis.core.api.image.util.CIELab;
 import org.weasis.core.api.media.data.MediaSeriesGroup;
-import org.weasis.core.api.media.data.TagReadable;
 import org.weasis.core.api.media.data.TagUtil;
 import org.weasis.core.api.media.data.TagW;
 import org.weasis.core.api.media.data.TagW.TagType;
 import org.weasis.core.api.media.data.Tagable;
-import org.weasis.core.api.service.BundleTools;
 import org.weasis.core.api.util.FileUtil;
 import org.weasis.core.api.util.StringUtil;
 import org.weasis.dicom.codec.DicomMediaIO;
@@ -71,6 +67,7 @@ import org.weasis.dicom.codec.TagD;
 import org.weasis.dicom.codec.TagD.Level;
 import org.weasis.dicom.codec.TagSeq;
 import org.weasis.dicom.codec.geometry.ImageOrientation;
+import org.weasis.opencv.data.LookupTableCV;
 
 /**
  * @author Nicolas Roduit
@@ -81,23 +78,9 @@ public class DicomMediaUtils {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DicomMediaUtils.class);
 
-    public static final String weasisRootUID;
-
-    static {
-        /**
-         * Set value for dicom root UID which should be registered at the
-         * http://www.iana.org/assignments/enterprise-numbers <br>
-         * Default value is 2.25, this enables users to generate OIDs without any registration procedure
-         *
-         * @see http://www.dclunie.com/medical-image-faq/html/part2.html#UUID <br>
-         *      http://www.oid-info.com/get/2.25 <br>
-         *      http://www.itu.int/ITU-T/asn1/uuid.html<br>
-         *      http://healthcaresecprivacy.blogspot.ch/2011/02/creating-and-using-unique-id-uuid-oid.html
-         */
-        weasisRootUID = BundleTools.SYSTEM_PREFERENCES.getProperty("weasis.dicom.root.uid", UIDUtils.getRoot()); //$NON-NLS-1$
-
-        UIDUtils.setRoot(weasisRootUID);
-    }
+    private static final int[] modalityLutAttributes = new int[] { Tag.RescaleIntercept, Tag.RescaleSlope };
+    private static final int[] VOILUTWindowLevelAttributes = new int[] { Tag.WindowCenter, Tag.WindowWidth };
+    private static final int[] LUTAttributes = new int[] { Tag.LUTDescriptor, Tag.LUTData };
 
     public static synchronized void enableAnonymizationProfile(boolean activate) {
         // Default anonymization profile
@@ -131,7 +114,6 @@ public class DicomMediaUtils {
             }
         }
         TagW.PatientPseudoUID.setAnonymizationType(type);
-
     }
 
     /**
@@ -155,10 +137,9 @@ public class DicomMediaUtils {
                 missingTagList.add(TagUtils.toString(tag));
             }
         }
-        return (countValues == requiredTags.length);
+        return countValues == requiredTags.length;
     }
 
-    // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /**
      * Either a Modality LUT Sequence containing a single Item or Rescale Slope and Intercept values shall be present
      * but not both.<br>
@@ -170,8 +151,6 @@ public class DicomMediaUtils {
      * @see - Dicom Standard 2011 - PS 3.3 § C.11.1 Modality LUT Module
      */
 
-    public static final int[] modalityLutAttributes = new int[] { Tag.RescaleIntercept, Tag.RescaleSlope };
-
     public static boolean containsRequiredModalityLUTAttributes(Attributes dcmItems) {
         return containsRequiredAttributes(dcmItems, modalityLutAttributes);
     }
@@ -180,7 +159,6 @@ public class DicomMediaUtils {
         return containsRequiredAttributes(dcmItems, Tag.ModalityLUTType) && containsLUTAttributes(dcmItems);
     }
 
-    // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     /**
      *
      * If any VOI LUT Table is included by an Image, a Window Width and Window Center or the VOI LUT Table, but not
@@ -195,16 +173,9 @@ public class DicomMediaUtils {
      * @see - Dicom Standard 2011 - PS 3.3 § C.11.2 VOI LUT Module
      */
 
-    public static final int[] VOILUTWindowLevelAttributes = new int[] { Tag.WindowCenter, Tag.WindowWidth };
-
     public static boolean containsRequiredVOILUTWindowLevelAttributes(Attributes dcmItems) {
         return containsRequiredAttributes(dcmItems, VOILUTWindowLevelAttributes);
     }
-
-    // ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-    public static final int[] LUTAttributes = //
-        new int[] { Tag.LUTDescriptor, Tag.LUTData };
 
     public static boolean containsLUTAttributes(Attributes dcmItems) {
         return containsRequiredAttributes(dcmItems, LUTAttributes);
@@ -220,12 +191,12 @@ public class DicomMediaUtils {
      * @see - Dicom Standard 2011 - PS 3.3 § C.11 LOOK UP TABLES AND PRESENTATION STATES
      */
 
-    public static LookupTableJAI createLut(Attributes dicomLutObject) {
+    public static LookupTableCV createLut(Attributes dicomLutObject) {
         if (dicomLutObject == null || dicomLutObject.isEmpty()) {
             return null;
         }
 
-        LookupTableJAI lookupTable = null;
+        LookupTableCV lookupTable = null;
 
         // Three values of the LUT Descriptor describe the format of the LUT Data in the corresponding Data Element
         int[] descriptor = DicomMediaUtils.getIntAyrrayFromDicomElement(dicomLutObject, Tag.LUTDescriptor, null);
@@ -253,7 +224,7 @@ public class DicomMediaUtils {
             try {
                 bData = dicomLutObject.getBytes(Tag.LUTData);
             } catch (IOException e) {
-                LOGGER.error("Cannot get byte[] of {}: {} ", TagUtils.toString(Tag.LUTData), e.getMessage()); //$NON-NLS-1$
+                LOGGER.error("Cannot get byte[] of {}: {} ", TagUtils.toString(Tag.LUTData), e); //$NON-NLS-1$
                 return null;
             }
 
@@ -268,11 +239,11 @@ public class DicomMediaUtils {
                     }
 
                     dataLength = bDataNew.length;
-                    lookupTable = new LookupTableJAI(bDataNew, offset);
+                    lookupTable = new LookupTableCV(bDataNew, offset);
 
                 } else {
                     dataLength = bData.length;
-                    lookupTable = new LookupTableJAI(bData, offset); // LUT entry value range should be [0,255]
+                    lookupTable = new LookupTableCV(bData, offset); // LUT entry value range should be [0,255]
                 }
             } else if (numBits <= 16) { // LUT Data should be stored in 16 bits allocated format
                 // LUT Data contains the LUT entry values, assuming data is always unsigned data
@@ -289,11 +260,11 @@ public class DicomMediaUtils {
                         bDataNew[i] = (byte) ((sData[i] & 0xffff) * maxOut / maxIn);
                     }
                     dataLength = bDataNew.length;
-                    lookupTable = new LookupTableJAI(bDataNew, offset);
+                    lookupTable = new LookupTableCV(bDataNew, offset);
                 } else {
                     // LUT Data contains the LUT entry values, assuming data is always unsigned data
                     dataLength = sData.length;
-                    lookupTable = new LookupTableJAI(sData, offset, true);
+                    lookupTable = new LookupTableCV(sData, offset, true);
 
                 }
             } else {
@@ -321,14 +292,11 @@ public class DicomMediaUtils {
         }
 
         String[] s = dicom.getStrings(tag);
-        if (s == null) {
+        if (s == null || s.length == 0) {
             return null;
         }
         if (s.length == 1) {
             return s[0];
-        }
-        if (s.length == 0) {
-            return ""; //$NON-NLS-1$
         }
         StringBuilder sb = new StringBuilder(s[0]);
         for (int i = 1; i < s.length; i++) {
@@ -383,27 +351,30 @@ public class DicomMediaUtils {
         return val;
     }
 
-    public static String getPatientAgeFromDicomElement(Attributes dicom, int tag, boolean computeIfNull) {
-        return getPatientAgeFromDicomElement(dicom, tag, null, null, computeIfNull);
+    public static String getPatientAgeInPeriod(Attributes dicom, int tag, boolean computeOnlyIfNull) {
+        return getPatientAgeInPeriod(dicom, tag, null, null, computeOnlyIfNull);
     }
 
-    public static String getPatientAgeFromDicomElement(Attributes dicom, int tag, String privateCreatorID,
-        String defaultValue, boolean computeIfNull) {
+    public static String getPatientAgeInPeriod(Attributes dicom, int tag, String privateCreatorID, String defaultValue,
+        boolean computeOnlyIfNull) {
         if (dicom == null) {
             return defaultValue;
         }
-        String s = dicom.getString(privateCreatorID, tag, defaultValue);
-        if (StringUtil.hasText(s) || !computeIfNull) {
-            return s;
+
+        if (computeOnlyIfNull) {
+            String s = dicom.getString(privateCreatorID, tag, defaultValue);
+            if (StringUtil.hasText(s)) {
+                return s;
+            }
         }
 
-        Date date = getDate(dicom, new int[] { Tag.ContentDate, Tag.AcquisitionDate, Tag.DateOfSecondaryCapture,
-            Tag.SeriesDate, Tag.StudyDate });
+        Date date = getDate(dicom, Tag.ContentDate, Tag.AcquisitionDate, Tag.DateOfSecondaryCapture, Tag.SeriesDate,
+            Tag.StudyDate);
 
         if (date != null) {
             Date bithdate = dicom.getDate(Tag.PatientBirthDate);
             if (bithdate != null) {
-                return String.format("%03dY", getDiffYears(bithdate, date));
+                return getPeriod(TagUtil.toLocalDate(bithdate), TagUtil.toLocalDate(date));
             }
         }
         return null;
@@ -420,21 +391,19 @@ public class DicomMediaUtils {
         return date;
     }
 
-    public static int getDiffYears(Date first, Date last) {
-        Calendar a = getCalendar(first);
-        Calendar b = getCalendar(last);
-        int diff = b.get(Calendar.YEAR) - a.get(Calendar.YEAR);
-        if (a.get(Calendar.MONTH) > b.get(Calendar.MONTH)
-            || (a.get(Calendar.MONTH) == b.get(Calendar.MONTH) && a.get(Calendar.DATE) > b.get(Calendar.DATE))) {
-            diff--;
-        }
-        return diff;
-    }
+    public static String getPeriod(LocalDate first, LocalDate last) {
+        Objects.requireNonNull(first);
+        Objects.requireNonNull(last);
 
-    private static Calendar getCalendar(Date date) {
-        Calendar cal = Calendar.getInstance(Locale.US);
-        cal.setTime(date);
-        return cal;
+        long years = ChronoUnit.YEARS.between(first, last);
+        if (years < 2) {
+            long months = ChronoUnit.MONTHS.between(first, last);
+            if (months < 2) {
+                return String.format("%03dD", ChronoUnit.DAYS.between(first, last)); //$NON-NLS-1$
+            }
+            return String.format("%03dM", months); //$NON-NLS-1$
+        }
+        return String.format("%03dY", years); //$NON-NLS-1$
     }
 
     public static Float getFloatFromDicomElement(Attributes dicom, int tag, Float defaultValue) {
@@ -581,40 +550,6 @@ public class DicomMediaUtils {
         return result < minInValue ? minInValue : result > maxInValue ? maxInValue : result;
     }
 
-    public static String buildPatientPseudoUID(TagReadable tagable) {
-        String patientID = TagD.getTagValue(tagable, Tag.PatientID, String.class);
-        String issuerOfPatientID = TagD.getTagValue(tagable, Tag.IssuerOfPatientID, String.class);
-        String patientName = TagD.getTagValue(tagable, Tag.PatientName, String.class);
-
-        return buildPatientPseudoUID(patientID, issuerOfPatientID, patientName);
-    }
-
-    public static String buildPatientPseudoUID(String patientID, String issuerOfPatientID, String patientName) {
-        /*
-         * IHE RAD TF-­‐2: 4.16.4.2.2.5.3
-         *
-         * The Image Display shall not display FrameSets for multiple patients simultaneously. Only images with exactly
-         * the same value for Patient’s ID (0010,0020) and Patient’s Name (0010,0010) shall be displayed at the same
-         * time (other Patient-level attributes may be different, empty or absent). Though it is possible that the same
-         * patient may have slightly different identifying attributes in different DICOM images performed at different
-         * sites or on different occasions, it is expected that such differences will have been reconciled prior to the
-         * images being provided to the Image Display (e.g., in the Image Manager/Archive or by the Portable Media
-         * Creator).
-         */
-        // Build a global identifier for the patient.
-        StringBuilder buffer = new StringBuilder(patientID == null ? TagW.NO_VALUE : patientID);
-        if (StringUtil.hasText(issuerOfPatientID)) {
-            // patientID + issuerOfPatientID => should be unique globally
-            buffer.append(issuerOfPatientID);
-        }
-        if (patientName != null) {
-            buffer.append(patientName.toUpperCase());
-        }
-
-        return buffer.toString();
-
-    }
-
     public static void setTag(Map<TagW, Object> tags, TagW tag, Object value) {
         if (tag != null) {
             if (value instanceof Sequence) {
@@ -644,8 +579,6 @@ public class DicomMediaUtils {
         // Patient Group
         if (TagD.getUID(Level.PATIENT).equals(group.getTagID())) {
             DicomMediaIO.tagManager.readTags(Level.PATIENT, header, group);
-            // Build patient age if not present
-            group.setTagNoNull(TagD.get(Tag.PatientAge), getPatientAgeFromDicomElement(header, Tag.PatientAge, true));
         }
         // Study Group
         else if (TagD.getUID(Level.STUDY).equals(group.getTagID())) {
@@ -654,6 +587,8 @@ public class DicomMediaUtils {
         // Series Group
         else if (TagD.getUID(Level.SERIES).equals(group.getTagID())) {
             DicomMediaIO.tagManager.readTags(Level.SERIES, header, group);
+            // Build patient age if not present
+            group.setTagNoNull(TagD.get(Tag.PatientAge), getPatientAgeInPeriod(header, Tag.PatientAge, true));
         }
     }
 
@@ -698,7 +633,7 @@ public class DicomMediaUtils {
 
     /**
      * Build the shape from DICOM Shutter
-     * 
+     *
      * @see <a href="http://dicom.nema.org/MEDICAL/DICOM/current/output/chtml/part03/sect_C.7.6.11.html">C.7.6.11
      *      Display Shutter Module</a>
      * @see <a href="http://dicom.nema.org/MEDICAL/DICOM/current/output/chtml/part03/sect_C.7.6.15.html">C.7.6.15 Bitmap
@@ -723,7 +658,7 @@ public class DicomMediaUtils {
                     DicomMediaUtils.getIntAyrrayFromDicomElement(dcmObject, Tag.CenterOfCircularShutter, null);
                 if (centerOfCircularShutter != null && centerOfCircularShutter.length >= 2) {
                     Ellipse2D ellipse = new Ellipse2D.Double();
-                    int radius = getIntegerFromDicomElement(dcmObject, Tag.RadiusOfCircularShutter, 0);
+                    double radius = getIntegerFromDicomElement(dcmObject, Tag.RadiusOfCircularShutter, 0);
                     // Thanks DICOM for reversing x,y by row,column
                     ellipse.setFrameFromCenter(centerOfCircularShutter[1], centerOfCircularShutter[0],
                         centerOfCircularShutter[1] + radius, centerOfCircularShutter[0] + radius);
@@ -882,7 +817,7 @@ public class DicomMediaUtils {
                      * be ignored from the perspective of applying window values, and for those SOP Classes, window
                      * values shall be applied directly to the stored pixel values without rescaling.
                      */
-                    LOGGER.info("Do not apply RescaleSlope and RescaleIntercept to {}", modlality);//$NON-NLS-1$
+                    LOGGER.trace("Do not apply RescaleSlope and RescaleIntercept to {}", modlality);//$NON-NLS-1$
                 } else {
                     TagD.get(Tag.RescaleSlope).readValue(mLutItems, tagable);
                     TagD.get(Tag.RescaleIntercept).readValue(mLutItems, tagable);
@@ -890,7 +825,7 @@ public class DicomMediaUtils {
                 }
 
             } else if (seqParentTag != null) {
-                LOGGER.info("Cannot apply Modality LUT from {} with inconsistent attributes", //$NON-NLS-1$
+                LOGGER.warn("Cannot apply Modality LUT from {} with inconsistent attributes", //$NON-NLS-1$
                     TagUtils.toString(seqParentTag));
             }
 
@@ -925,7 +860,7 @@ public class DicomMediaUtils {
                 }
             }
 
-            if (LOGGER.isDebugEnabled()) {
+            if (LOGGER.isTraceEnabled()) {
 
                 // The output range of the Modality LUT Module depends on whether or not Rescale Slope and Rescale
                 // Intercept or the Modality LUT Sequence are used.
@@ -943,10 +878,10 @@ public class DicomMediaUtils {
 
                 if (tagable.getTagValue(TagW.ModalityLUTData) != null) {
                     if (TagD.getTagValue(tagable, Tag.RescaleIntercept) != null) {
-                        LOGGER.debug("Modality LUT Sequence shall NOT be present if Rescale Intercept is present"); //$NON-NLS-1$
+                        LOGGER.trace("Modality LUT Sequence shall NOT be present if Rescale Intercept is present"); //$NON-NLS-1$
                     }
                     if (TagD.getTagValue(tagable, Tag.ModalityLUTType) == null) {
-                        LOGGER.debug("Modality Type is required if Modality LUT Sequence is present. "); //$NON-NLS-1$
+                        LOGGER.trace("Modality Type is required if Modality LUT Sequence is present. "); //$NON-NLS-1$
                     }
                 } else if (TagD.getTagValue(tagable, Tag.RescaleIntercept) != null) {
                     if (TagD.getTagValue(tagable, Tag.RescaleSlope) == null) {
@@ -954,10 +889,10 @@ public class DicomMediaUtils {
                     }
                 } else {
                     String modlality = TagD.getTagValue(tagable, Tag.Modality, String.class);
-                    if (("MR".equals(modlality) || "XA".equals(modlality) || "XRF".equals(modlality) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
-                        || "PT".equals(modlality)) == false) { //$NON-NLS-1$
+                    if ("MR".equals(modlality) || "XA".equals(modlality) || "XRF".equals(modlality) //$NON-NLS-1$ //$NON-NLS-2$ //$NON-NLS-3$
+                        || !"PT".equals(modlality)) { //$NON-NLS-1$
                         LOGGER
-                            .debug("Modality Rescale Intercept is required if Modality LUT Sequence is not present. "); //$NON-NLS-1$
+                            .trace("Modality Rescale Intercept is required if Modality LUT Sequence is not present. "); //$NON-NLS-1$
                     }
                 }
             }
@@ -1012,7 +947,7 @@ public class DicomMediaUtils {
             // alternative views may be presented. (@see Dicom Standard 2011 - PS 3.3 § C.11.2 VOI LUT Module)
 
             if (voiLUTSequence != null && !voiLUTSequence.isEmpty()) {
-                LookupTableJAI[] voiLUTsData = new LookupTableJAI[voiLUTSequence.size()];
+                LookupTableCV[] voiLUTsData = new LookupTableCV[voiLUTSequence.size()];
                 String[] voiLUTsExplanation = new String[voiLUTsData.length];
 
                 for (int i = 0; i < voiLUTsData.length; i++) {
@@ -1072,7 +1007,7 @@ public class DicomMediaUtils {
                     tagable.setTag(TagW.PRLUTsData, createLut(presentationLUT));
                     tagable.setTag(TagW.PRLUTsExplanation,
                         getStringFromDicomElement(presentationLUT, Tag.LUTExplanation));
-                    tagable.setTagNoNull(TagD.get(Tag.PresentationLUTShape), "IDENTITY");
+                    tagable.setTagNoNull(TagD.get(Tag.PresentationLUTShape), "IDENTITY"); //$NON-NLS-1$
                 } else {
                     // value: INVERSE, IDENTITY
                     // INVERSE => must inverse values (same as monochrome 1)
@@ -1127,8 +1062,8 @@ public class DicomMediaUtils {
                 // GML = grams/milliliter
                 // STDDEV = standard deviations
                 if ("BQML".equals(units)) { //$NON-NLS-1$
-                    Float weight = getFloatFromDicomElement(dicomObject, Tag.PatientWeight, 0.0f);
-                    if (weight != 0.0f) {
+                    Float weight = getFloatFromDicomElement(dicomObject, Tag.PatientWeight, 0.0f); // in Kg
+                    if (MathUtil.isDifferentFromZero(weight)) {
                         Attributes dcm =
                             dicomObject.getNestedDataset(Tag.RadiopharmaceuticalInformationSequence, index);
                         if (dcm != null) {
@@ -1161,11 +1096,11 @@ public class DicomMediaUtils {
                                     }
                                     if (scanDate != null) {
                                         injectDateTime = TagUtil.dateTime(scanDate, injectTime);
-                                        time = scanDateTime - injectDateTime.getTime();
+                                        time = (double) scanDateTime - injectDateTime.getTime();
                                     }
 
                                 } else {
-                                    time = scanDateTime - injectDateTime.getTime();
+                                    time = (double) scanDateTime - injectDateTime.getTime();
                                 }
                                 // Exclude negative value (case over midnight)
                                 if (time > 0) {
@@ -1179,15 +1114,12 @@ public class DicomMediaUtils {
                 } else if ("CNTS".equals(units)) { //$NON-NLS-1$
                     String privateTagCreator = dicomObject.getString(0x70530010);
                     double privateSUVFactor = dicomObject.getDouble(0x70531000, 0.0);
-                    if ("Philips PET Private Group".equals(privateTagCreator) && privateSUVFactor != 0.0) { //$NON-NLS-1$
-                        suvFactor = privateSUVFactor;
-                        // units= "g/ml";
+                    if ("Philips PET Private Group".equals(privateTagCreator) //$NON-NLS-1$
+                        && MathUtil.isDifferentFromZero(privateSUVFactor)) {
+                        suvFactor = privateSUVFactor; // units => "g/ml"
                     }
                 } else if ("GML".equals(units)) { //$NON-NLS-1$
                     suvFactor = 1.0;
-                    // UNIT
-                    // String unit = dicomObject.getString(Tag.SUVType);
-
                 }
                 if (MathUtil.isDifferentFromZero(suvFactor)) {
                     tagable.setTag(TagW.SuvFactor, suvFactor);
@@ -1196,7 +1128,8 @@ public class DicomMediaUtils {
         }
     }
 
-    public static Attributes createDicomPR(Attributes dicomSourceAttribute, String seriesInstanceUID) {
+    public static Attributes createDicomPR(Attributes dicomSourceAttribute, String seriesInstanceUID,
+        String sopInstanceUID) {
 
         final int[] patientStudyAttributes = { Tag.SpecificCharacterSet, Tag.StudyDate, Tag.StudyTime,
             Tag.StudyDescription, Tag.AccessionNumber, Tag.IssuerOfAccessionNumberSequence, Tag.ReferringPhysicianName,
@@ -1206,9 +1139,12 @@ public class DicomMediaUtils {
         Attributes pr = new Attributes(dicomSourceAttribute, patientStudyAttributes);
 
         // TODO implement other ColorSoftcopyPresentationStateStorageSOPClass...
-        pr.setString(Tag.SOPClassUID, VR.UI, UID.GrayscaleSoftcopyPresentationStateStorageSOPClass);
-        pr.setString(Tag.SOPInstanceUID, VR.UI, UIDUtils.createUID());
-        pr.setDate(Tag.PresentationCreationDateAndTime, new Date());
+        pr.setString(Tag.SOPClassUID, VR.UI, UID.GrayscaleSoftcopyPresentationStateStorage);
+        pr.setString(Tag.SOPInstanceUID, VR.UI,
+            StringUtil.hasText(sopInstanceUID) ? sopInstanceUID : UIDUtils.createUID());
+        Date now = new Date();
+        pr.setDate(Tag.PresentationCreationDateAndTime, now);
+        pr.setDate(Tag.ContentDateAndTime, now);
         pr.setString(Tag.Modality, VR.CS, "PR"); //$NON-NLS-1$
         pr.setString(Tag.SeriesInstanceUID, VR.UI,
             StringUtil.hasText(seriesInstanceUID) ? seriesInstanceUID : UIDUtils.createUID());
@@ -1242,10 +1178,6 @@ public class DicomMediaUtils {
          *       Instances. Key Object Documents do not reside in a Series of Images or other Composite SOP Instances.
          */
 
-        if (!StringUtil.hasText(seriesInstanceUID)) {
-            seriesInstanceUID = UIDUtils.createUID();
-        }
-
         /**
          * @note Loads properties that reference all "Key Object Codes" defined in the following resource :
          *       KeyObjectSelectionCodes.xml
@@ -1263,7 +1195,8 @@ public class DicomMediaUtils {
         for (KeyObjectSelectionCode code : codeByValue.values()) {
             Set<KeyObjectSelectionCode> resourceSet = resourcesByContextID.get(code.contextGroupID);
             if (resourceSet == null) {
-                resourcesByContextID.put(code.contextGroupID, resourceSet = new TreeSet<>());
+                resourceSet = new TreeSet<>();
+                resourcesByContextID.put(code.contextGroupID, resourceSet);
             }
             resourceSet.add(code);
         }
@@ -1316,7 +1249,8 @@ public class DicomMediaUtils {
         dKOS.setDate(Tag.ContentDateAndTime, new Date());
         dKOS.setString(Tag.Modality, VR.CS, "KO"); //$NON-NLS-1$
         dKOS.setNull(Tag.ReferencedPerformedProcedureStepSequence, VR.SQ);
-        dKOS.setString(Tag.SeriesInstanceUID, VR.UI, seriesInstanceUID);
+        dKOS.setString(Tag.SeriesInstanceUID, VR.UI,
+            StringUtil.hasText(seriesInstanceUID) ? seriesInstanceUID : UIDUtils.createUID());
         dKOS.setString(Tag.SeriesNumber, VR.IS, seriesNumber);
         dKOS.setString(Tag.InstanceNumber, VR.IS, instanceNumber);
         dKOS.setString(Tag.ValueType, VR.CS, "CONTAINER"); //$NON-NLS-1$
@@ -1382,52 +1316,15 @@ public class DicomMediaUtils {
             stream = DicomMediaUtils.class.getResourceAsStream("/config/KeyObjectSelectionCodes.xml"); //$NON-NLS-1$
             xmler = xmlif.createXMLStreamReader(stream);
 
-            int eventType;
             while (xmler.hasNext()) {
-                eventType = xmler.next();
-                switch (eventType) {
+                switch (xmler.next()) {
                     case XMLStreamConstants.START_ELEMENT:
                         String key = xmler.getName().getLocalPart();
                         if ("resources".equals(key)) { //$NON-NLS-1$
                             while (xmler.hasNext()) {
-                                eventType = xmler.next();
-                                switch (eventType) {
+                                switch (xmler.next()) {
                                     case XMLStreamConstants.START_ELEMENT:
-                                        key = xmler.getName().getLocalPart();
-                                        if ("resource".equals(key)) { //$NON-NLS-1$
-                                            String resourceName = xmler.getAttributeValue(null, "name"); //$NON-NLS-1$
-                                            String contextGroupID = xmler.getAttributeValue(null, "contextId"); //$NON-NLS-1$
-
-                                            while (xmler.hasNext()) {
-                                                eventType = xmler.next();
-                                                switch (eventType) {
-                                                    case XMLStreamConstants.START_ELEMENT:
-                                                        key = xmler.getName().getLocalPart();
-                                                        if ("code".equals(key)) { //$NON-NLS-1$
-
-                                                            String codingSchemeDesignator =
-                                                                xmler.getAttributeValue(null, "scheme"); //$NON-NLS-1$
-                                                            String codeValue = xmler.getAttributeValue(null, "value"); //$NON-NLS-1$
-                                                            String codeMeaning =
-                                                                xmler.getAttributeValue(null, "meaning"); //$NON-NLS-1$
-
-                                                            String conceptNameCodeModifier =
-                                                                xmler.getAttributeValue(null, "conceptMod"); //$NON-NLS-1$
-                                                            String contexGroupIdModifier =
-                                                                xmler.getAttributeValue(null, "contexId"); //$NON-NLS-1$
-
-                                                            codeByValue.put(codeValue,
-                                                                new DicomMediaUtils.KeyObjectSelectionCode(resourceName,
-                                                                    contextGroupID, codingSchemeDesignator, codeValue,
-                                                                    codeMeaning, conceptNameCodeModifier,
-                                                                    contexGroupIdModifier));
-                                                        }
-                                                        break;
-                                                    default:
-                                                        break;
-                                                }
-                                            }
-                                        }
+                                        readCodeResource(xmler, codeByValue);
                                         break;
                                     default:
                                         break;
@@ -1442,7 +1339,7 @@ public class DicomMediaUtils {
         }
 
         catch (XMLStreamException e) {
-            e.printStackTrace();
+            LOGGER.error("Reading KO Codes", e); //$NON-NLS-1$
             codeByValue = null;
         } finally {
             FileUtil.safeClose(xmler);
@@ -1451,7 +1348,51 @@ public class DicomMediaUtils {
         return codeByValue;
     }
 
+    private static void readCodeResource(XMLStreamReader xmler, Map<String, KeyObjectSelectionCode> codeByValue)
+        throws XMLStreamException {
+        String key = xmler.getName().getLocalPart();
+        if ("resource".equals(key)) { //$NON-NLS-1$
+            String resourceName = xmler.getAttributeValue(null, "name"); //$NON-NLS-1$
+            String contextGroupID = xmler.getAttributeValue(null, "contextId"); //$NON-NLS-1$
+
+            while (xmler.hasNext()) {
+                int eventType = xmler.next();
+                switch (eventType) {
+                    case XMLStreamConstants.START_ELEMENT:
+                        key = xmler.getName().getLocalPart();
+                        if ("code".equals(key)) { //$NON-NLS-1$
+
+                            String codingSchemeDesignator = xmler.getAttributeValue(null, "scheme"); //$NON-NLS-1$
+                            String codeValue = xmler.getAttributeValue(null, "value"); //$NON-NLS-1$
+                            String codeMeaning = xmler.getAttributeValue(null, "meaning"); //$NON-NLS-1$
+
+                            String conceptNameCodeModifier = xmler.getAttributeValue(null, "conceptMod"); //$NON-NLS-1$
+                            String contexGroupIdModifier = xmler.getAttributeValue(null, "contexId"); //$NON-NLS-1$
+
+                            codeByValue.put(codeValue,
+                                new DicomMediaUtils.KeyObjectSelectionCode(resourceName, contextGroupID,
+                                    codingSchemeDesignator, codeValue, codeMeaning, conceptNameCodeModifier,
+                                    contexGroupIdModifier));
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    }
+
     public static class KeyObjectSelectionCode implements Comparable<KeyObjectSelectionCode> {
+
+        final String resourceName;
+        final String contextGroupID;
+
+        final String codingSchemeDesignator;
+        final String codeValue;
+        final String codeMeaning;
+
+        final String conceptNameCodeModifier;
+        final String contexGroupIdModifier;
 
         public KeyObjectSelectionCode(String resourceName, String contextGroupID, String codingSchemeDesignator,
             String codeValue, String codeMeaning, String conceptNameCodeModifier, String contexGroupIdModifier) {
@@ -1466,16 +1407,6 @@ public class DicomMediaUtils {
             this.conceptNameCodeModifier = conceptNameCodeModifier;
             this.contexGroupIdModifier = contexGroupIdModifier;
         }
-
-        final String resourceName;
-        final String contextGroupID;
-
-        final String codingSchemeDesignator;
-        final String codeValue;
-        final String codeMeaning;
-
-        final String conceptNameCodeModifier;
-        final String contexGroupIdModifier;
 
         final Boolean hasConceptModifier() {
             return conceptNameCodeModifier != null;
@@ -1563,7 +1494,7 @@ public class DicomMediaUtils {
 
     public static TemporalAccessor[] getDatesFromDicomElement(XMLStreamReader xmler, String attribute, TagType type,
         TemporalAccessor[] defaultValue) {
-        return getDatesFromDicomElement(xmler, attribute, type, defaultValue, "\\");
+        return getDatesFromDicomElement(xmler, attribute, type, defaultValue, "\\"); //$NON-NLS-1$
     }
 
     public static TemporalAccessor[] getDatesFromDicomElement(XMLStreamReader xmler, String attribute, TagType type,
@@ -1571,12 +1502,12 @@ public class DicomMediaUtils {
         if (attribute != null) {
             String val = xmler.getAttributeValue(null, attribute);
             if (val != null) {
-                String[] strs = val.split(separator);
+                String[] strs = val.split(Pattern.quote(separator));
                 TemporalAccessor[] vals = new TemporalAccessor[strs.length];
                 for (int i = 0; i < strs.length; i++) {
-                    if (TagType.TIME.equals(type)) {
+                    if (TagType.DICOM_TIME.equals(type)) {
                         vals[i] = TagD.getDicomTime(strs[i]);
-                    } else if (TagType.DATETIME.equals(type)) {
+                    } else if (TagType.DICOM_DATETIME.equals(type)) {
                         vals[i] = TagD.getDicomDateTime(null, strs[i]);
                     } else {
                         vals[i] = TagD.getDicomDate(strs[i]);
@@ -1589,7 +1520,6 @@ public class DicomMediaUtils {
     }
 
     public static void fillAttributes(Map<TagW, Object> tags, Attributes dataset) {
-
         if (tags != null && dataset != null) {
             ElementDictionary dic = ElementDictionary.getStandardElementDictionary();
 
@@ -1600,7 +1530,6 @@ public class DicomMediaUtils {
     }
 
     public static void fillAttributes(Iterator<Entry<TagW, Object>> iter, Attributes dataset) {
-
         if (iter != null && dataset != null) {
             ElementDictionary dic = ElementDictionary.getStandardElementDictionary();
 
@@ -1612,8 +1541,7 @@ public class DicomMediaUtils {
     }
 
     public static void fillAttributes(Attributes dataset, final TagW tag, final Object val, ElementDictionary dic) {
-
-        if (dataset != null) {
+        if (dataset != null && tag != null) {
             TagType type = tag.getType();
             int id = tag.getId();
             String key = dic.keywordOf(id);

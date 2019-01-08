@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.core.api.gui.util;
 
 import java.awt.Color;
@@ -21,11 +21,13 @@ import javax.swing.border.Border;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 
+import org.weasis.core.api.util.StringUtil;
+
 /**
  * The Class TableHaederRenderer.
  *
- * @author Nicolas Roduit
  */
+@SuppressWarnings("serial")
 public class TableHeaderRenderer extends JLabel implements TableCellRenderer {
 
     public TableHeaderRenderer() {
@@ -56,7 +58,10 @@ public class TableHeaderRenderer extends JLabel implements TableCellRenderer {
                 setFont(header.getFont());
             }
         }
-        String val = ((value == null) || (value == "")) ? " " : value.toString(); //$NON-NLS-1$ //$NON-NLS-2$
+        String val = value == null ? null : value.toString();
+        if (!StringUtil.hasText(val)) {
+            val = " "; //$NON-NLS-1$
+        }
         setText(val);
         setToolTipText(val);
         Border border = null;
@@ -70,20 +75,23 @@ public class TableHeaderRenderer extends JLabel implements TableCellRenderer {
         return this;
     }
 
-    // The following methods override the defaults for performance reasons
     @Override
     public void validate() {
+        // Override for performance reasons
     }
 
     @Override
     public void revalidate() {
+        // Override for performance reasons
     }
 
     @Override
     protected void firePropertyChange(String propertyName, Object oldValue, Object newValue) {
+        // Override for performance reasons
     }
 
     @Override
     public void firePropertyChange(String propertyName, boolean oldValue, boolean newValue) {
+        // Override for performance reasons
     }
 }

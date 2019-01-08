@@ -1,13 +1,13 @@
 /*******************************************************************************
- * Copyright (c) 2010 Nicolas Roduit.
+ * Copyright (c) 2009-2018 Weasis Team and others.
  * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v1.0
+ * are made available under the terms of the Eclipse Public License v2.0
  * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v10.html
+ * http://www.eclipse.org/legal/epl-v20.html
  *
  * Contributors:
  *     Nicolas Roduit - initial API and implementation
- ******************************************************************************/
+ *******************************************************************************/
 package org.weasis.launcher;
 
 import java.awt.BorderLayout;
@@ -23,6 +23,7 @@ import java.awt.Rectangle;
 import java.awt.Window;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Map;
 import java.util.Properties;
 
 import javax.swing.BorderFactory;
@@ -38,11 +39,6 @@ import org.osgi.framework.BundleContext;
 import org.weasis.launcher.applet.WeasisFrame;
 
 public class WeasisLoader {
-
-    public enum LoadingMessageType {
-        No, Disclaimer, NewVersion
-    };
-
     public static final String LBL_LOADING = Messages.getString("WebStartLoader.load"); //$NON-NLS-1$
     public static final String LBL_DOWNLOADING = Messages.getString("WebStartLoader.download"); //$NON-NLS-1$
     public static final String FRM_TITLE =
@@ -106,15 +102,9 @@ public class WeasisLoader {
         downloadProgress.setString(LBL_LOADING);
 
         cancelButton.setText(Messages.getString("WebStartLoader.cancel")); //$NON-NLS-1$
-        cancelButton.addActionListener(new java.awt.event.ActionListener() {
+        cancelButton.addActionListener(evt -> closing());
 
-            @Override
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                closing();
-            }
-        });
-
-        Icon icon = null;
+        Icon icon;
         File iconFile = null;
         if (resPath != null) {
             iconFile = new File(resPath, "images" + File.separator + "about.png"); //$NON-NLS-1$ //$NON-NLS-2$
@@ -187,13 +177,7 @@ public class WeasisLoader {
         if (isClosed()) {
             return;
         }
-        EventQueue.invokeLater(new Runnable() {
-
-            @Override
-            public void run() {
-                downloadProgress.setMaximum(max);
-            }
-        });
+        EventQueue.invokeLater(() -> downloadProgress.setMaximum(max));
     }
 
     /*
@@ -203,14 +187,10 @@ public class WeasisLoader {
         if (isClosed()) {
             return;
         }
-        EventQueue.invokeLater(new Runnable() {
-
-            @Override
-            public void run() {
-                downloadProgress.setString(String.format(PRG_STRING_FORMAT, val, downloadProgress.getMaximum()));
-                downloadProgress.setValue(val);
-                downloadProgress.repaint();
-            }
+        EventQueue.invokeLater(() -> {
+            downloadProgress.setString(String.format(PRG_STRING_FORMAT, val, downloadProgress.getMaximum()));
+            downloadProgress.setValue(val);
+            downloadProgress.repaint();
         });
 
     }
@@ -225,18 +205,14 @@ public class WeasisLoader {
 
     public void open() {
         try {
-            EventQueue.invokeAndWait(new Runnable() {
-
-                @Override
-                public void run() {
-                    if (container == null) {
-                        initGUI();
-                    }
-                    displayOnScreen();
+            EventQueue.invokeAndWait(() -> {
+                if (container == null) {
+                    initGUI();
                 }
+                displayOnScreen();
             });
         } catch (InterruptedException e) {
-            e.printStackTrace();
+            Thread.currentThread().interrupt();
         } catch (InvocationTargetException e) {
             e.printStackTrace();
         }
@@ -246,22 +222,18 @@ public class WeasisLoader {
         if (isClosed()) {
             return;
         }
-        EventQueue.invokeLater(new Runnable() {
-
-            @Override
-            public void run() {
-                container.setVisible(false);
-                if (container.getParent() != null) {
-                    container.getParent().remove(container);
-                }
-                if (container instanceof Window) {
-                    ((Window) container).dispose();
-                }
-                container = null;
-                cancelButton = null;
-                downloadProgress = null;
-                loadingLabel = null;
+        EventQueue.invokeLater(() -> {
+            container.setVisible(false);
+            if (container.getParent() != null) {
+                container.getParent().remove(container);
             }
+            if (container instanceof Window) {
+                ((Window) container).dispose();
+            }
+            container = null;
+            cancelButton = null;
+            downloadProgress = null;
+            loadingLabel = null;
         });
     }
 
@@ -281,7 +253,7 @@ public class WeasisLoader {
         }
     }
 
-    public void setFelix(Properties configProps, BundleContext bundleContext) {
-        AutoProcessor.process(configProps, bundleContext, this);
+    public void setFelix(Map<String, String> serverProp, BundleContext bundleContext) {
+        AutoProcessor.process(serverProp, bundleContext, this);
     }
 }
