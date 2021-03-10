@@ -1,46 +1,43 @@
-/*******************************************************************************
- * Copyright (c) 2009-2018 Weasis Team and others.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v20.html
+/*
+ * Copyright (c) 2009-2020 Weasis Team and other contributors.
  *
- * Contributors:
- *     Nicolas Roduit - initial API and implementation
- *******************************************************************************/
+ * This program and the accompanying materials are made available under the terms of the Eclipse
+ * Public License 2.0 which is available at http://www.eclipse.org/legal/epl-2.0, or the Apache
+ * License, Version 2.0 which is available at https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ */
 package org.weasis.base.explorer.list;
 
 import java.io.Serializable;
 import java.nio.file.DirectoryStream.Filter;
 import java.nio.file.Path;
-
 import javax.swing.ListModel;
-
 import org.weasis.base.explorer.JIExplorerContext;
 
 public interface IThumbnailModel<E> extends ListModel<E>, Serializable {
 
-    void setData(Path dir);
+  void setData(Path dir);
 
-    void loadContent(Path dir);
+  void loadContent(Path dir);
 
-    void loadContent(Path path, Filter<Path> filter);
+  void loadContent(Path path, Filter<Path> filter);
 
-    void reload();
+  void reload();
 
-    JIExplorerContext getReloadContext();
+  JIExplorerContext getReloadContext();
 
-    void setReloadContext(JIExplorerContext reloadContext);
+  void setReloadContext(JIExplorerContext reloadContext);
 
-    boolean isEmpty();
+  boolean isEmpty();
 
-    void notifyAsUpdated(int index);
+  void notifyAsUpdated(int index);
 
-    void addElement(final E obj);
+  void addElement(final E obj);
 
-    boolean contains(final E elem);
+  boolean contains(final E elem);
 
-    boolean removeElement(final E obj);
+  boolean removeElement(final E obj);
 
-    void clear();
+  void clear();
 }

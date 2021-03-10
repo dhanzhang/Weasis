@@ -23,6 +23,8 @@ target/
 release.properties
 pom.xml.releaseBackup
 pom.xml.tag
+dependency-reduced-pom.xml
+.flattened-pom.xml
 
 # OS generated files
 .DS_Store

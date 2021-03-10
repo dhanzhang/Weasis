@@ -1,102 +1,99 @@
-/*******************************************************************************
- * Copyright (c) 2009-2018 Weasis Team and others.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v20.html
+/*
+ * Copyright (c) 2009-2020 Weasis Team and other contributors.
  *
- * Contributors:
- *     Nicolas Roduit - initial API and implementation
- *******************************************************************************/
+ * This program and the accompanying materials are made available under the terms of the Eclipse
+ * Public License 2.0 which is available at http://www.eclipse.org/legal/epl-2.0, or the Apache
+ * License, Version 2.0 which is available at https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ */
 package org.weasis.core.api.media.data;
 
 import java.io.File;
 import java.nio.file.Paths;
 import java.util.Objects;
 import java.util.Optional;
-
-import org.weasis.core.api.util.FileUtil;
+import org.weasis.core.util.FileUtil;
 
 public class FileCache {
 
-    private final MediaReader reader;
-    private File originalTempFile;
-    private File transformedFile;
-    private boolean requireTransformation;
+  private final MediaReader reader;
+  private File originalTempFile;
+  private File transformedFile;
+  private boolean requireTransformation;
 
-    public FileCache(MediaReader reader) {
-        this.reader = Objects.requireNonNull(reader);
-        this.requireTransformation = false;
+  public FileCache(MediaReader reader) {
+    this.reader = Objects.requireNonNull(reader);
+    this.requireTransformation = false;
+  }
+
+  public boolean isLocalFile() {
+    return reader.getUri().getScheme().startsWith("file");
+  }
+
+  public boolean isElementInMemory() {
+    return reader.getUri().getScheme().startsWith("data"); // NON-NLS
+  }
+
+  public Optional<File> getOriginalFile() {
+    File originalFile = null;
+    if (originalTempFile != null) {
+      originalFile = originalTempFile;
+    } else if (isLocalFile()) {
+      originalFile = Paths.get(reader.getUri()).toFile();
     }
+    return Optional.ofNullable(originalFile);
+  }
 
-    public boolean isLocalFile() {
-        return reader.getUri().getScheme().startsWith("file"); //$NON-NLS-1$
+  public File getFinalFile() {
+    if (transformedFile != null) {
+      return transformedFile;
     }
+    return getOriginalFile().orElse(null);
+  }
 
-    public boolean isElementInMemory() {
-        return reader.getUri().getScheme().startsWith("data"); //$NON-NLS-1$
+  public synchronized File getOriginalTempFile() {
+    return originalTempFile;
+  }
+
+  public synchronized void setOriginalTempFile(File downloadedFile) {
+    this.originalTempFile = downloadedFile;
+  }
+
+  public synchronized File getTransformedFile() {
+    return transformedFile;
+  }
+
+  public synchronized void setTransformedFile(File transformedFile) {
+    this.transformedFile = transformedFile;
+  }
+
+  public synchronized boolean isRequireTransformation() {
+    return requireTransformation;
+  }
+
+  public synchronized void setRequireTransformation(boolean requireTransformation) {
+    this.requireTransformation = requireTransformation;
+  }
+
+  public long getLength() {
+    Optional<File> f = getOriginalFile();
+    if (f.isPresent()) {
+      return f.get().length();
     }
+    return 0L;
+  }
 
-    public Optional<File> getOriginalFile() {
-        File originalFile = null;
-        if (originalTempFile != null) {
-            originalFile = originalTempFile;
-        } else if (isLocalFile()) {
-            originalFile = Paths.get(reader.getUri()).toFile();
-        }
-        return Optional.ofNullable(originalFile);
+  public long getLastModified() {
+    Optional<File> f = getOriginalFile();
+    if (f.isPresent()) {
+      return f.get().lastModified();
     }
+    return 0L;
+  }
 
-    public File getFinalFile() {
-        if (transformedFile != null) {
-            return transformedFile;
-        }
-        return getOriginalFile().orElse(null);
-    }
-
-    public synchronized File getOriginalTempFile() {
-        return originalTempFile;
-    }
-
-    public synchronized void setOriginalTempFile(File downloadedFile) {
-        this.originalTempFile = downloadedFile;
-    }
-
-    public synchronized File getTransformedFile() {
-        return transformedFile;
-    }
-
-    public synchronized void setTransformedFile(File transformedFile) {
-        this.transformedFile = transformedFile;
-    }
-
-    public synchronized boolean isRequireTransformation() {
-        return requireTransformation;
-    }
-
-    public synchronized void setRequireTransformation(boolean requireTransformation) {
-        this.requireTransformation = requireTransformation;
-    }
-
-    public long getLength() {
-        Optional<File> f = getOriginalFile();
-        if (f.isPresent()) {
-            return f.get().length();
-        }
-        return 0L;
-    }
-
-    public long getLastModified() {
-        Optional<File> f = getOriginalFile();
-        if (f.isPresent()) {
-            return f.get().lastModified();
-        }
-        return 0L;
-    }
-
-    public void dispose() {
-        FileUtil.delete(originalTempFile);
-        FileUtil.delete(transformedFile);
-    }
-
+  public void dispose() {
+    FileUtil.delete(originalTempFile);
+    FileUtil.delete(transformedFile);
+  }
 }

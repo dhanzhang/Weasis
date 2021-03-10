@@ -1,35 +1,33 @@
-/*******************************************************************************
- * Copyright (c) 2009-2018 Weasis Team and others.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v20.html
+/*
+ * Copyright (c) 2009-2020 Weasis Team and other contributors.
  *
- * Contributors:
- *     Nicolas Roduit - initial API and implementation
- *******************************************************************************/
+ * This program and the accompanying materials are made available under the terms of the Eclipse
+ * Public License 2.0 which is available at http://www.eclipse.org/legal/epl-2.0, or the Apache
+ * License, Version 2.0 which is available at https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ */
 package org.weasis.dicom.viewer2d;
 
 public enum ResetTools {
-    ALL(Messages.getString("ResetTools.all")), //$NON-NLS-1$
+  ALL(Messages.getString("ResetTools.all")),
 
-    WL(Messages.getString("ResetTools.wl")), //$NON-NLS-1$
+  WL(Messages.getString("ResetTools.wl")),
 
-    ZOOM(Messages.getString("ViewerPrefView.zoom")), //$NON-NLS-1$
+  ZOOM(Messages.getString("ViewerPrefView.zoom")),
 
-    ROTATION(Messages.getString("ResetTools.rotation")), //$NON-NLS-1$
+  ROTATION(Messages.getString("ResetTools.rotation")),
 
-    PAN(Messages.getString("ResetTools.pan")); //$NON-NLS-1$
+  PAN(Messages.getString("ResetTools.pan"));
 
-    private final String name;
+  private final String name;
 
-    private ResetTools(String name) {
-        this.name = name;
-    }
+  private ResetTools(String name) {
+    this.name = name;
+  }
 
-    @Override
-    public String toString() {
-        return name;
-    }
-
+  @Override
+  public String toString() {
+    return name;
+  }
 }

@@ -1,77 +1,64 @@
-/*******************************************************************************
- * Copyright (c) 2009-2018 Weasis Team and others.
- * All rights reserved. This program and the accompanying materials
- * are made available under the terms of the Eclipse Public License v2.0
- * which accompanies this distribution, and is available at
- * http://www.eclipse.org/legal/epl-v20.html
+/*
+ * Copyright (c) 2009-2020 Weasis Team and other contributors.
  *
- * Contributors:
- *     Nicolas Roduit - initial API and implementation
- *******************************************************************************/
+ * This program and the accompanying materials are made available under the terms of the Eclipse
+ * Public License 2.0 which is available at http://www.eclipse.org/legal/epl-2.0, or the Apache
+ * License, Version 2.0 which is available at https://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * SPDX-License-Identifier: EPL-2.0 OR Apache-2.0
+ */
 package org.weasis.acquire.explorer.media;
 
 import java.util.Objects;
-
 import javax.swing.Icon;
 
 /**
  * Represent either a FileSystemDrive or a MediaDevice
  *
- * @author btja
- *
+ * @author btja, nirt
  */
 public abstract class MediaSource {
 
-    protected final String id; // assume to be unique, like a DeviceID or a FilePath/URL
-    protected String displayName;
-    protected String description;
-    protected Icon icon;
+  protected final String path;
+  protected String displayName;
+  protected String description;
+  protected Icon icon;
 
-    public MediaSource(String id) {
-        this.id = Objects.requireNonNull(id);
-    }
+  public MediaSource(String path) {
+    this.path = Objects.requireNonNull(path);
+  }
 
-    public final String getID() {
-        return id;
-    }
+  public final String getPath() {
+    return path;
+  }
 
-    public String getDisplayName() {
-        return displayName != null ? displayName : id;
-    }
+  public String getDisplayName() {
+    return displayName != null ? displayName : path;
+  }
 
-    public String getDescription() {
-        return description != null ? description : ""; //$NON-NLS-1$
-    }
+  public String getDescription() {
+    return description != null ? description : "";
+  }
 
-    public Icon getIcon() {
-        return icon;
-    }
+  public Icon getIcon() {
+    return icon;
+  }
 
-    @Override
-    public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if (obj == null) {
-            return false;
-        }
-        if (getClass() != obj.getClass()) {
-            return false;
-        }
-        MediaSource other = (MediaSource) obj;
-        return id.equals(other.id);
-    }
+  @Override
+  public String toString() {
+    return displayName;
+  }
 
-    @Override
-    public int hashCode() {
-        final int prime = 31;
-        int result = 1;
-        result = prime * result + id.hashCode();
-        return result;
-    }
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    MediaSource that = (MediaSource) o;
+    return path.equals(that.path);
+  }
 
-    @Override
-    public String toString() {
-        return displayName;
-    }
+  @Override
+  public int hashCode() {
+    return Objects.hash(path);
+  }
 }
